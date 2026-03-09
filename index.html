@@ -1,0 +1,3838 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>숲속 루미큐브 4인 테이블</title>
+  <style>
+    :root {
+      --bg: #2e7d32;
+      --panel: rgba(0, 0, 0, 0.34);
+      --panel-line: rgba(255, 255, 255, 0.1);
+      --table-wood: #6d4c41;
+      --table-felt: #7b5a4e;
+      --tile-face: #fffdf7;
+      --tile-edge: #d9c8aa;
+      --text-dark: #2d2823;
+      --accent: #ffd54f;
+      --ok: #66bb6a;
+      --warn: #ffca28;
+      --danger: #ef5350;
+      --p1: #f48fb1;
+      --p2: #ffb74d;
+      --p3: #64b5f6;
+      --p4: #ba68c8;
+      --shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+    }
+
+    @import url("https://fonts.googleapis.com/css2?family=Jua&display=swap");
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Jua", system-ui, sans-serif;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #3f8f46, var(--bg));
+      color: white;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    button {
+      font: inherit;
+      border: none;
+      cursor: pointer;
+    }
+
+    .screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.22s ease;
+    }
+
+    .screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #game-screen {
+      position: static;
+      inset: auto;
+      display: block;
+      min-height: 100vh;
+      padding: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    #game-screen.hidden {
+      display: none;
+    }
+
+    .menu-box {
+      width: min(620px, 94vw);
+      max-height: 92vh;
+      overflow: auto;
+      background: rgba(255, 255, 255, 0.96);
+      color: #333;
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: 0 24px 52px rgba(0, 0, 0, 0.34);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .menu-box::-webkit-scrollbar,
+    .player-list::-webkit-scrollbar,
+    .table-area::-webkit-scrollbar,
+    .rack-scroller::-webkit-scrollbar {
+      display: none;
+    }
+
+    .menu-title {
+      text-align: center;
+      color: #3e2723;
+      font-size: 2.2rem;
+      line-height: 1.1;
+    }
+
+    .menu-desc {
+      text-align: center;
+      color: #675c52;
+      line-height: 1.45;
+    }
+
+    .menu-section-title {
+      font-size: 0.98rem;
+      color: #716459;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 6px;
+      margin-top: 4px;
+    }
+
+    .btn-lg {
+      width: 100%;
+      border-radius: 16px;
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+      transition: transform 0.12s ease;
+      text-align: left;
+    }
+
+    .btn-lg:active,
+    .btn:active,
+    .state-btn:active,
+    .tile:active,
+    .group-card:active {
+      transform: scale(0.98);
+    }
+
+    .btn-orange { background: #fb8c00; }
+    .btn-purple { background: #7e57c2; }
+    .btn-blue { background: #039be5; }
+    .btn-green { background: #43a047; }
+    .btn-gray { background: #78909c; }
+
+    #menu-main,
+    #menu-setup {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #menu-setup {
+      display: none;
+    }
+
+    .setup-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .setup-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .setup-player {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #3f352d;
+    }
+
+    .setup-icon {
+      font-size: 1.6rem;
+    }
+
+    .setup-note {
+      color: #75685e;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .state-btn {
+      border-radius: 999px;
+      padding: 8px 14px;
+      min-width: 148px;
+      font-weight: bold;
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+      white-space: nowrap;
+    }
+
+    .setup-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .animal-btn {
+      background: #8d6e63;
+      color: white;
+      min-width: 140px;
+    }
+
+    .state-human { background: #4caf50; color: white; }
+    .state-ai { background: #ff7043; color: white; }
+    .state-off { background: #cfd8dc; color: #607d8b; }
+    .state-on { background: #43a047; color: white; }
+    .state-off-option { background: #b0bec5; color: #455a64; }
+
+    .game-layout {
+      width: 100%;
+      min-height: 100vh;
+      height: auto;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr) 330px;
+      gap: 18px;
+      padding: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 2px solid var(--panel-line);
+      border-radius: 24px;
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-left,
+    .panel-right {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      max-height: calc(100vh - 36px);
+    }
+
+    .panel-left {
+      gap: 14px;
+    }
+
+    .panel-right {
+      justify-content: space-between;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .panel-title {
+      font-size: 1.45rem;
+      color: var(--accent);
+      text-align: center;
+    }
+
+    .player-list {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 4px;
+    }
+
+    .player-card {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 12px;
+      border-left: 6px solid transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .player-card.active {
+      background: rgba(255, 255, 255, 0.16);
+      border-left-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .p-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .p-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .p-icon {
+      font-size: 1.9rem;
+    }
+
+    .p-name {
+      font-size: 1rem;
+      line-height: 1.1;
+    }
+
+    .p-sub {
+      opacity: 0.9;
+      font-size: 0.84rem;
+      margin-top: 2px;
+    }
+
+    .p-badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f4f4f4;
+    }
+
+    .p-stats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .mini-chip,
+    .chip {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.83rem;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .mini-log {
+      min-height: 22px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.18);
+      padding: 7px 9px;
+      font-size: 0.82rem;
+      color: #e6e6e6;
+      line-height: 1.35;
+    }
+
+    .center-stage {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto auto;
+      gap: 14px;
+    }
+
+    .table-shell {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto;
+      gap: 12px;
+      padding: 16px;
+      background: linear-gradient(180deg, var(--table-wood), var(--table-felt));
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      border: 2px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .table-title {
+      font-size: 1.45rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-sub {
+      font-size: 0.88rem;
+      opacity: 0.9;
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+
+    .chip-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .table-area {
+      min-height: 220px;
+      overflow: visible;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 12px;
+      align-content: start;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 12px;
+    }
+
+    .empty-table {
+      min-height: 180px;
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 18px;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .group-card {
+      background: rgba(255, 253, 247, 0.96);
+      color: var(--text-dark);
+      border-radius: 18px;
+      padding: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      border: 3px solid transparent;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+    }
+
+    .group-card.selected {
+      border-color: var(--accent);
+    }
+
+    .group-card.valid {
+      box-shadow: 0 0 0 2px rgba(102, 187, 106, 0.28), 0 8px 18px rgba(0, 0, 0, 0.16);
+    }
+
+    .group-card.invalid {
+      box-shadow: 0 0 0 2px rgba(239, 83, 80, 0.28), 0 8px 18px rgba(0, 0, 0, 0.16);
+    }
+
+    .group-card.hint-target {
+      border-color: #80cbc4;
+      box-shadow: 0 0 0 3px rgba(128, 203, 196, 0.28), 0 8px 18px rgba(0, 0, 0, 0.16);
+      animation: hintPulseBorder 1.5s ease-in-out infinite;
+    }
+
+    .group-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .group-badge {
+      border-radius: 999px;
+      padding: 4px 8px;
+      color: white;
+      font-size: 0.74rem;
+    }
+
+    .badge-ok { background: var(--ok); }
+    .badge-warn { background: var(--warn); color: #4b3900; }
+    .badge-bad { background: var(--danger); }
+
+    .tile-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .rack-panel {
+      background: rgba(0, 0, 0, 0.22);
+      border-radius: 22px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: var(--shadow);
+      border: 2px solid rgba(255, 255, 255, 0.08);
+      min-height: 120px;
+      max-height: min(34vh, 340px);
+      overflow: hidden;
+    }
+
+    .rack-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .rack-head .chip-row {
+      flex: 1;
+      min-width: 0;
+      justify-content: flex-end;
+    }
+
+    .rack-title {
+      font-size: 1.12rem;
+    }
+
+    .rack-scroller {
+      flex: 1 1 auto;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding-right: 4px;
+      padding-bottom: 4px;
+    }
+
+    .rack-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+      min-height: 84px;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .tile {
+      width: 52px;
+      height: 72px;
+      background: var(--tile-face);
+      border: 2px solid var(--tile-edge);
+      border-radius: 12px;
+      color: var(--text-dark);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 2px;
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.18);
+      cursor: pointer;
+      transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+      flex: 0 0 auto;
+    }
+
+    .tile.small {
+      width: 40px;
+      height: 56px;
+      border-radius: 10px;
+    }
+
+    .tile.selected {
+      transform: translateY(-8px);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(255, 213, 79, 0.25), 0 10px 18px rgba(0, 0, 0, 0.2);
+    }
+
+    .tile.drawn {
+      border-color: #81c784;
+      box-shadow: 0 0 0 3px rgba(129, 199, 132, 0.24), 0 10px 18px rgba(0, 0, 0, 0.2);
+    }
+
+    .tile.hint {
+      border-color: #ffe082;
+      box-shadow: 0 0 0 3px rgba(255, 224, 130, 0.28), 0 10px 18px rgba(0, 0, 0, 0.2);
+      animation: hintGlowWarm 1.4s ease-in-out infinite;
+    }
+
+    .tile.hint-source {
+      border-color: #80deea;
+      box-shadow: 0 0 0 3px rgba(128, 222, 234, 0.28), 0 10px 18px rgba(0, 0, 0, 0.2);
+      animation: hintGlowCool 1.4s ease-in-out infinite;
+    }
+
+    .tile-num {
+      font-size: 1.45rem;
+      line-height: 1;
+    }
+
+    .tile-icon {
+      font-size: 0.72rem;
+      opacity: 0.9;
+    }
+
+    .tile.red .tile-num { color: #e53935; }
+    .tile.blue .tile-num { color: #1e88e5; }
+    .tile.yellow .tile-num { color: #f9a825; }
+    .tile.black .tile-num { color: #37474f; }
+    .tile.joker .tile-num { color: #8e24aa; }
+    .tile.joker .tile-icon { font-size: 0.95rem; }
+
+    .info-box {
+      background: rgba(0, 0, 0, 0.24);
+      border-radius: 18px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .info-title {
+      color: var(--accent);
+      font-size: 1.12rem;
+    }
+
+    .info-text {
+      line-height: 1.45;
+      font-size: 0.95rem;
+      color: #f3f3f3;
+    }
+
+    .hint-summary {
+      font-weight: bold;
+      color: #fff8cf;
+      margin-bottom: 6px;
+    }
+
+    .hint-reason {
+      color: #e4f7f3;
+      margin-bottom: 8px;
+    }
+
+    .hint-step {
+      margin-top: 4px;
+      padding-left: 2px;
+    }
+
+    .control-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .control-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      border-radius: 14px;
+      padding: 13px 12px;
+      color: white;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
+      font-size: 0.96rem;
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn-sort { background: #00897b; }
+    .btn-grouping { background: #5e35b1; }
+    .btn-undo { background: #546e7a; }
+    .btn-hint { background: #fbc02d; color: #4d3600; }
+    .btn-draw { background: #fb8c00; }
+    .btn-end { background: #43a047; }
+    .btn-clear { background: #6d6d6d; }
+    .btn-menu { background: #616161; width: 100%; }
+
+    @keyframes hintGlowWarm {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(255, 224, 130, 0.16), 0 8px 16px rgba(0, 0, 0, 0.18); }
+      50% { box-shadow: 0 0 0 4px rgba(255, 224, 130, 0.42), 0 10px 18px rgba(0, 0, 0, 0.2); }
+    }
+
+    @keyframes hintGlowCool {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(128, 222, 234, 0.16), 0 8px 16px rgba(0, 0, 0, 0.18); }
+      50% { box-shadow: 0 0 0 4px rgba(128, 222, 234, 0.42), 0 10px 18px rgba(0, 0, 0, 0.2); }
+    }
+
+    @keyframes hintPulseBorder {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    .toast {
+      position: fixed;
+      top: 18%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.88);
+      color: white;
+      padding: 13px 22px;
+      border-radius: 999px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 300;
+      white-space: nowrap;
+      border: 2px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, -42%);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 400;
+    }
+
+    .overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .overlay-box {
+      width: min(380px, 88vw);
+      background: white;
+      color: #333;
+      border-radius: 24px;
+      padding: 26px 24px;
+      text-align: center;
+      box-shadow: 0 24px 52px rgba(0, 0, 0, 0.38);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .overlay-emoji {
+      font-size: 4.1rem;
+    }
+
+    .overlay-title {
+      font-size: 1.6rem;
+      color: #3e2723;
+    }
+
+    .overlay-text {
+      color: #6b6056;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1280px) {
+      .game-layout {
+        grid-template-columns: 260px minmax(0, 1fr) 300px;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .game-layout {
+        grid-template-columns: 280px minmax(0, 1fr);
+        grid-template-areas:
+          "left center"
+          "right center";
+      }
+
+      .panel-left { grid-area: left; }
+      .center-stage { grid-area: center; }
+      .panel-right { grid-area: right; }
+    }
+
+    @media (max-width: 1024px) {
+      #game-screen {
+        min-height: 100vh;
+      }
+      .game-layout {
+        min-height: 100vh;
+        grid-template-columns: 1fr;
+        grid-template-areas: none;
+      }
+      .panel-left,
+      .panel-right {
+        position: static;
+        max-height: none;
+      }
+      .panel-left,
+      .panel-right,
+      .center-stage {
+        min-height: auto;
+      }
+      .table-area {
+        min-height: 320px;
+      }
+      .control-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div id="start-screen" class="screen">
+    <div class="menu-box">
+      <div class="menu-title">🐾 숲속 루미큐브</div>
+      <div class="menu-desc">
+        4인용 테이블 구조 + 테이블 재배열 + 조커/30점 룰 옵션을 넣은 버전입니다.<br />
+        빠른 시작도 현재 선택된 옵션을 그대로 사용합니다.
+      </div>
+
+      <div id="menu-main">
+        <div class="menu-section-title">빠른 시작</div>
+        <button class="btn-lg btn-orange" onclick="game.quickStart(2)">
+          <div>2인 로컬 대전</div>
+          <span>🐰⚔️🦝</span>
+        </button>
+        <button class="btn-lg btn-purple" onclick="game.quickStart(4)">
+          <div>4인 로컬 테이블</div>
+          <span>🐰🦝🦊🦉</span>
+        </button>
+        <button class="btn-lg btn-green" onclick="game.quickStartMixed()">
+          <div>1인 + AI 3명</div>
+          <span>🎭</span>
+        </button>
+
+        <div class="menu-section-title">룰 옵션</div>
+        <div id="rule-options-main" class="setup-container"></div>
+
+        <div class="menu-section-title">사용자 설정</div>
+        <button class="btn-lg btn-blue" onclick="ui.showSetup()">
+          <div>플레이어 구성 커스텀</div>
+          <span>⚙️</span>
+        </button>
+      </div>
+
+      <div id="menu-setup">
+        <div class="menu-section-title">플레이어 설정</div>
+        <div id="setup-container" class="setup-container"></div>
+
+        <div class="menu-section-title">룰 옵션</div>
+        <div id="rule-options-setup" class="setup-container"></div>
+
+        <div class="setup-note">
+          HUMAN / AI-1 / AI-2 / AI-3 / AI-4 / AI-5 / OFF 순서로 바뀝니다.<br />
+          AI-1 초급, AI-2 쉬움, AI-3 보통, AI-4 어려움, AI-5 최상 단계로 난이도가 올라갑니다.<br />
+          30점 등록 룰을 켜면 각 플레이어는 첫 성공 턴에 자기 손패만으로 30점 이상 새 줄을 등록해야 하고, 그 전엔 기존 테이블을 건드릴 수 없습니다.
+        </div>
+
+        <button class="btn-lg btn-orange" onclick="game.startCustom()">
+          <div>게임 시작</div>
+          <span>🍁</span>
+        </button>
+        <button class="btn-lg btn-gray" onclick="ui.hideSetup()">
+          <div>뒤로</div>
+          <span>↩️</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="game-screen" class="screen hidden">
+    <div class="game-layout">
+      <aside class="panel panel-left">
+        <div class="panel-title">🌲 플레이어 현황</div>
+        <div id="player-list" class="player-list"></div>
+      </aside>
+
+      <main class="center-stage">
+        <section class="table-shell">
+          <div class="table-header">
+            <div>
+              <div class="table-title">🍂 중앙 테이블</div>
+              <div class="table-sub">손패 타일뿐 아니라 테이블 타일까지 선택해서 새 줄 만들기 / 줄에 추가가 가능합니다. 턴 종료 시 모든 줄이 유효해야 합니다.</div>
+            </div>
+            <div class="chip-row">
+              <div class="chip">가방 <span id="bag-count">0</span>장</div>
+              <div class="chip">턴 <span id="turn-label">-</span></div>
+              <div class="chip">선택 <span id="selected-count">0</span>장</div>
+              <div class="chip" id="rule-joker-chip">조커 OFF</div>
+              <div class="chip" id="rule-open-chip">30룰 OFF</div>
+            </div>
+          </div>
+          <div id="table-area" class="table-area"></div>
+        </section>
+
+        <section class="rack-panel">
+          <div class="rack-head">
+            <div class="rack-title"><strong id="rack-owner">토끼</strong> 손패</div>
+            <div class="chip-row">
+              <div id="selection-label" class="chip">선택 없음</div>
+              <div id="group-label" class="chip">선택 줄 없음</div>
+            </div>
+          </div>
+          <div class="rack-scroller">
+            <div id="rack-row" class="rack-row"></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="panel panel-right">
+        <div>
+          <div class="info-box">
+            <div id="info-title" class="info-title">플레이 가이드</div>
+            <div id="info-text" class="info-text">손패/테이블 타일 여러 장 선택 → 새 줄 생성, 또는 줄 선택 → 줄에 추가 순서로 진행하세요.</div>
+          </div>
+
+          <div class="control-stack" style="margin-top:14px;">
+            <div class="control-row">
+              <button id="btn-sort-color" class="btn btn-sort" onclick="game.sortRack('color')">🎨 색 정렬</button>
+              <button id="btn-sort-number" class="btn btn-sort" onclick="game.sortRack('number')">🔢 숫자 정렬</button>
+            </div>
+            <div class="control-row">
+              <button id="btn-new-group" class="btn btn-grouping" onclick="game.createGroupFromSelection()">➕ 새 줄</button>
+              <button id="btn-append-group" class="btn btn-grouping" onclick="game.appendSelectionToSelectedGroup()">📥 줄에 추가</button>
+            </div>
+            <div class="control-row">
+              <button id="btn-clear-select" class="btn btn-clear" onclick="game.clearSelections()">❎ 선택 해제</button>
+              <button id="btn-undo-action" class="btn btn-undo" onclick="game.undoTurnAction()">↩️ 무르기</button>
+            </div>
+            <div class="control-row">
+              <button id="btn-request-hint" class="btn btn-hint" onclick="game.requestHint()">💡 힌트</button>
+            </div>
+            <div class="control-row">
+              <button id="btn-draw-tile" class="btn btn-draw" onclick="game.drawTile()">🪵 1장 뽑기</button>
+              <button id="btn-end-turn" class="btn btn-end" onclick="game.endTurn()">✅ 턴 종료</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-menu" onclick="game.toMenu()">🏠 메뉴로</button>
+      </aside>
+    </div>
+    <div id="toast" class="toast">알림</div>
+  </div>
+
+  <div id="modal" class="overlay">
+    <div class="overlay-box">
+      <div id="win-emoji" class="overlay-emoji">🏆</div>
+      <div id="win-title" class="overlay-title">승리!</div>
+      <div id="win-text" class="overlay-text">손패를 먼저 비운 동물이 승리합니다.</div>
+      <div class="control-row">
+        <button class="btn btn-end" onclick="game.restart()">다시 하기</button>
+        <button class="btn btn-menu" onclick="game.toMenu()">메뉴로</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = [
+      { key: "red", icon: "🍓", label: "빨강" },
+      { key: "blue", icon: "💧", label: "파랑" },
+      { key: "yellow", icon: "🌼", label: "노랑" },
+      { key: "black", icon: "🌑", label: "검정" }
+    ];
+
+    const PLAYER_PRESETS = [
+      { slot: 0, name: "토끼", icon: "🐰", accent: "var(--p1)" },
+      { slot: 1, name: "너구리", icon: "🦝", accent: "var(--p2)" },
+      { slot: 2, name: "여우", icon: "🦊", accent: "var(--p3)" },
+      { slot: 3, name: "부엉이", icon: "🦉", accent: "var(--p4)" }
+    ];
+
+    const ANIMAL_OPTIONS = [
+      { name: "토끼", icon: "🐰" },
+      { name: "너구리", icon: "🦝" },
+      { name: "여우", icon: "🦊" },
+      { name: "부엉이", icon: "🦉" },
+      { name: "곰", icon: "🐻" },
+      { name: "호랑이", icon: "🐯" },
+      { name: "사자", icon: "🦁" },
+      { name: "팬더", icon: "🐼" },
+      { name: "기린", icon: "🦒" },
+      { name: "돼지", icon: "🐷" },
+      { name: "고양이", icon: "🐱" },
+      { name: "강아지", icon: "🐶" }
+    ];
+
+    const SETUP_STATES = ["HUMAN", "AI-1", "AI-2", "AI-3", "AI-4", "AI-5", "OFF"];
+    const AI_LEVEL_INFO = {
+      1: { short: "AI-1", label: "AI-1 초급", desc: "초급" },
+      2: { short: "AI-2", label: "AI-2 쉬움", desc: "쉬움" },
+      3: { short: "AI-3", label: "AI-3 보통", desc: "보통" },
+      4: { short: "AI-4", label: "AI-4 어려움", desc: "어려움" },
+      5: { short: "AI-5", label: "AI-5 최상", desc: "최상" }
+    };
+    const deepCopy = (value) => JSON.parse(JSON.stringify(value));
+    const getSetupStateLabel = (state, compact = false) => {
+      if (state === "HUMAN" || state === "OFF") return state;
+      const level = Number(String(state).split("-")[1]);
+      const info = AI_LEVEL_INFO[level];
+      return compact ? (info?.short || state) : (info?.label || state);
+    };
+    const calculateInitialOpenScore = (groups) => groups.reduce((sum, group) => sum + (RummyRules.analyzeGroup(group).score || 0), 0);
+    const isInitialOpenSatisfied = (groups) => groups.length > 0 && calculateInitialOpenScore(groups) >= 30;
+    const normalizeGroupTiles = (group) => {
+      const colorOrder = { red: 0, blue: 1, yellow: 2, black: 3, joker: 4 };
+      const non = group.filter(tile => !tile.joker);
+      const jokers = group.filter(tile => tile.joker);
+      if (non.length === 0) return [...jokers];
+
+      const sameColor = non.every(tile => tile.color === non[0].color);
+      const sameNumber = non.every(tile => tile.number === non[0].number);
+
+      if (sameColor) {
+        return [...non].sort((a, b) => a.number - b.number || a.id - b.id).concat(jokers);
+      }
+
+      if (sameNumber) {
+        return [...non].sort((a, b) => colorOrder[a.color] - colorOrder[b.color] || a.id - b.id).concat(jokers);
+      }
+
+      return [...group];
+    };
+    const normalizeTableGroups = (table) => table.map(group => normalizeGroupTiles(group)).filter(group => group.length > 0);
+    const serializeTableState = (table) => table
+      .map(group => normalizeGroupTiles(group).map(tile => tile.id).sort((a, b) => a - b).join("-"))
+      .sort()
+      .join("|");
+    const getColorIcon = (colorKey) => COLORS.find(color => color.key === colorKey)?.icon || "";
+    const formatTileText = (tile) => tile?.joker ? "조커🃏" : `${tile?.number}${getColorIcon(tile?.color)}`;
+    const formatTileList = (tiles) => tiles.map(tile => formatTileText(tile)).join(", ");
+    const findGroupIndicesByTileIds = (table, groupTileIdsList) => {
+      const indices = [];
+      groupTileIdsList.forEach(groupTileIds => {
+        if (!groupTileIds || groupTileIds.length === 0) return;
+        const idSet = new Set(groupTileIds);
+        const index = table.findIndex(group => group.every(tile => idSet.has(tile.id)) && group.length === idSet.size);
+        if (index >= 0 && !indices.includes(index)) indices.push(index);
+      });
+      return indices;
+    };
+
+    class RummyRules {
+      static maxRunScore(length) {
+        const start = Math.max(1, 14 - length);
+        return (length * (2 * start + length - 1)) / 2;
+      }
+
+      static explainGroup(group) {
+        const basic = this.analyzeGroup(group);
+        if (!basic.valid) {
+          return {
+            ...basic,
+            canonicalNumbers: [],
+            jokerAssignments: []
+          };
+        }
+
+        const non = group.filter(tile => !tile.joker);
+        if (basic.kind === "set" || (basic.kind === "wild" && non.length > 0 && non.every(tile => tile.number === non[0].number))) {
+          const number = non[0]?.number ?? 13;
+          return {
+            ...basic,
+            canonicalNumbers: Array.from({ length: group.length }, () => number),
+            jokerAssignments: group
+              .filter(tile => tile.joker)
+              .sort((a, b) => a.id - b.id)
+              .map(tile => ({
+                tileId: tile.id,
+                actsAsNumber: number,
+                actsAsColor: null
+              }))
+          };
+        }
+
+        if (basic.kind === "run" || basic.kind === "wild") {
+          const len = group.length;
+          const numbers = non.map(tile => tile.number).sort((a, b) => a - b);
+          const bestStart = non.length === 0
+            ? Math.max(1, 14 - len)
+            : Math.min(numbers[0], 13 - len + 1);
+          const canonicalNumbers = Array.from({ length: len }, (_, index) => bestStart + index);
+          const nonNumbers = new Set(non.map(tile => tile.number));
+          const missingNumbers = canonicalNumbers.filter(number => !nonNumbers.has(number));
+          const color = non[0]?.color || null;
+          return {
+            ...basic,
+            canonicalNumbers,
+            jokerAssignments: group
+              .filter(tile => tile.joker)
+              .sort((a, b) => a.id - b.id)
+              .map((tile, index) => ({
+                tileId: tile.id,
+                actsAsNumber: missingNumbers[index] ?? canonicalNumbers[canonicalNumbers.length - 1] ?? null,
+                actsAsColor: color
+              }))
+          };
+        }
+
+        return {
+          ...basic,
+          canonicalNumbers: [],
+          jokerAssignments: []
+        };
+      }
+
+      static analyzeSet(group) {
+        const len = group.length;
+        if (len === 0) return { valid: false, possible: false, label: "빈 줄", score: 0, kind: null };
+        if (len > 4) return { valid: false, possible: false, label: "세트 초과", score: 0, kind: null };
+
+        const non = group.filter(tile => !tile.joker);
+        if (non.length === 0) {
+          return len >= 3
+            ? { valid: true, possible: true, label: "조커 세트", score: len * 13, kind: "set" }
+            : { valid: false, possible: true, label: "세트 대기", score: 0, kind: null };
+        }
+
+        const number = non[0].number;
+        if (!non.every(tile => tile.number === number)) {
+          return { valid: false, possible: false, label: "규칙 불일치", score: 0, kind: null };
+        }
+
+        const colors = non.map(tile => tile.color);
+        if (new Set(colors).size !== colors.length) {
+          return { valid: false, possible: false, label: "규칙 불일치", score: 0, kind: null };
+        }
+
+        if (len >= 3) {
+          return { valid: true, possible: true, label: group.some(tile => tile.joker) ? "세트(조커)" : "세트", score: number * len, kind: "set" };
+        }
+
+        return { valid: false, possible: true, label: "세트 대기", score: 0, kind: null };
+      }
+
+      static analyzeRun(group) {
+        const len = group.length;
+        if (len === 0) return { valid: false, possible: false, label: "빈 줄", score: 0, kind: null };
+        if (len > 13) return { valid: false, possible: false, label: "런 초과", score: 0, kind: null };
+
+        const non = group.filter(tile => !tile.joker);
+        if (non.length === 0) {
+          return len >= 3
+            ? { valid: true, possible: true, label: "조커 런", score: this.maxRunScore(len), kind: "run" }
+            : { valid: false, possible: true, label: "런 대기", score: 0, kind: null };
+        }
+
+        const color = non[0].color;
+        if (!non.every(tile => tile.color === color)) {
+          return { valid: false, possible: false, label: "규칙 불일치", score: 0, kind: null };
+        }
+
+        const numbers = non.map(tile => tile.number).sort((a, b) => a - b);
+        if (new Set(numbers).size !== numbers.length) {
+          return { valid: false, possible: false, label: "규칙 불일치", score: 0, kind: null };
+        }
+
+        const minNum = numbers[0];
+        const maxNum = numbers[numbers.length - 1];
+        const startMin = Math.max(1, maxNum - len + 1);
+        const startMax = Math.min(minNum, 13 - len + 1);
+
+        if (startMin > startMax) {
+          return { valid: false, possible: false, label: "규칙 불일치", score: 0, kind: null };
+        }
+
+        if (len >= 3) {
+          const bestStart = startMax;
+          const score = (len * (2 * bestStart + len - 1)) / 2;
+          return { valid: true, possible: true, label: group.some(tile => tile.joker) ? "런(조커)" : "런", score, kind: "run" };
+        }
+
+        return { valid: false, possible: true, label: "런 대기", score: 0, kind: null };
+      }
+
+      static analyzeGroup(group) {
+        if (!group || group.length === 0) {
+          return { valid: false, ready: false, label: "빈 줄", score: 0, kind: null };
+        }
+
+        const setRes = this.analyzeSet(group);
+        const runRes = this.analyzeRun(group);
+
+        if (setRes.valid && runRes.valid) {
+          return {
+            valid: true,
+            ready: true,
+            label: "조커 조합",
+            score: Math.max(setRes.score, runRes.score),
+            kind: "wild"
+          };
+        }
+
+        if (setRes.valid) {
+          return { valid: true, ready: true, label: setRes.label, score: setRes.score, kind: setRes.kind };
+        }
+
+        if (runRes.valid) {
+          return { valid: true, ready: true, label: runRes.label, score: runRes.score, kind: runRes.kind };
+        }
+
+        if (setRes.possible || runRes.possible) {
+          return {
+            valid: false,
+            ready: false,
+            label: setRes.possible ? setRes.label : runRes.label,
+            score: 0,
+            kind: null
+          };
+        }
+
+        return {
+          valid: false,
+          ready: group.length >= 3,
+          label: group.length >= 3 ? "규칙 불일치" : "조합 대기",
+          score: 0,
+          kind: null
+        };
+      }
+    }
+
+    class RummyAIUtils {
+      static popcount(mask) {
+        let count = 0;
+        let value = mask;
+        while (value > 0) {
+          value &= value - 1;
+          count += 1;
+        }
+        return count;
+      }
+
+      static cloneState(state) {
+        return {
+          rack: deepCopy(state.rack),
+          table: deepCopy(state.table),
+          opened: state.opened,
+          baseTableCount: state.baseTableCount,
+          actions: [...state.actions],
+          stats: { ...state.stats },
+          meta: deepCopy(state.meta || {})
+        };
+      }
+
+      static serializeState(state) {
+        const rackKey = state.rack.map(tile => tile.id).sort((a, b) => a - b).join(",");
+        return `${rackKey}::${serializeTableState(state.table)}`;
+      }
+
+      static getValidGroupsFromTiles(tiles, cache, maxSize = tiles.length) {
+        const ids = tiles.map(tile => tile.id).sort((a, b) => a - b).join(",");
+        const key = `${ids}|${maxSize}`;
+        if (!cache.has(key)) {
+          const found = [];
+          const total = 1 << tiles.length;
+          for (let mask = 1; mask < total; mask += 1) {
+            const size = this.popcount(mask);
+            if (size < 3 || size > maxSize) continue;
+            const subset = [];
+            for (let i = 0; i < tiles.length; i += 1) {
+              if (mask & (1 << i)) subset.push(tiles[i]);
+            }
+            const result = RummyRules.analyzeGroup(subset);
+            if (!result.valid) continue;
+            found.push({
+              ids: subset.map(tile => tile.id).sort((a, b) => a - b),
+              size,
+              score: result.score || 0,
+              jokerCount: subset.filter(tile => tile.joker).length
+            });
+          }
+          found.sort((a, b) =>
+            b.size - a.size ||
+            b.score - a.score ||
+            a.jokerCount - b.jokerCount ||
+            a.ids.join("-").localeCompare(b.ids.join("-"))
+          );
+          cache.set(key, found);
+        }
+
+        const byId = new Map(tiles.map(tile => [tile.id, tile]));
+        return cache.get(key)
+          .map(group => ({
+            ...group,
+            tiles: group.ids.map(id => byId.get(id)).filter(Boolean)
+          }))
+          .filter(group => group.tiles.length === group.ids.length);
+      }
+
+      static scoreRackSubset(tiles) {
+        const nonJokers = tiles.filter(tile => !tile.joker);
+        const numbers = new Set(nonJokers.map(tile => tile.number)).size;
+        const colors = new Set(nonJokers.map(tile => tile.color)).size;
+        return tiles.reduce((sum, tile) => sum + (tile.joker ? 25 : tile.number + 6), 0)
+          + (numbers < nonJokers.length ? 18 : 0)
+          + (colors === 1 && nonJokers.length > 1 ? 18 : 0)
+          + (nonJokers.length > 1
+            ? Math.max(0, 10 - (Math.max(...nonJokers.map(tile => tile.number)) - Math.min(...nonJokers.map(tile => tile.number))))
+            : 0)
+          + tiles.length * 12;
+      }
+
+      static enumerateRackSubsets(rack, maxSize) {
+        const total = 1 << rack.length;
+        const subsets = [];
+        for (let mask = 1; mask < total; mask += 1) {
+          const size = this.popcount(mask);
+          if (size === 0 || size > maxSize) continue;
+          const tiles = [];
+          for (let i = 0; i < rack.length; i += 1) {
+            if (mask & (1 << i)) tiles.push(rack[i]);
+          }
+          subsets.push({
+            ids: tiles.map(tile => tile.id),
+            tiles,
+            size,
+            score: this.scoreRackSubset(tiles)
+          });
+        }
+        subsets.sort((a, b) => b.score - a.score || b.size - a.size);
+        return subsets;
+      }
+
+      static getRackSubsets(rack, maxSize, limit = 24) {
+        const subsets = this.enumerateRackSubsets(rack, maxSize);
+        return subsets.slice(0, limit);
+      }
+
+      static getTableGroupCombos(table, maxGroups, limit = 8) {
+        const combos = [];
+        const visit = (start, picked) => {
+          if (picked.length > 0) {
+            const size = picked.reduce((sum, index) => sum + table[index].length, 0);
+            const jokerCount = picked.reduce((sum, index) => sum + table[index].filter(tile => tile.joker).length, 0);
+            combos.push({
+              indices: [...picked],
+              score: size * 12 + jokerCount * 30
+            });
+          }
+          if (picked.length === maxGroups) return;
+          for (let index = start; index < table.length; index += 1) {
+            picked.push(index);
+            visit(index + 1, picked);
+            picked.pop();
+          }
+        };
+        visit(0, []);
+        combos.sort((a, b) => b.score - a.score || a.indices.length - b.indices.length);
+        return combos.slice(0, limit);
+      }
+
+      static findExactCoverPartitions(pool, cache, options = {}) {
+        if (pool.length < 3) return [];
+        const groups = this.getValidGroupsFromTiles(pool, cache, pool.length);
+        if (groups.length === 0) return [];
+
+        const poolIndexById = new Map(pool.map((tile, index) => [tile.id, index]));
+        const candidates = groups.map(group => {
+          let mask = 0;
+          group.ids.forEach(id => {
+            mask |= 1 << poolIndexById.get(id);
+          });
+          return {
+            ...group,
+            mask
+          };
+        });
+        const byIndex = Array.from({ length: pool.length }, () => []);
+        candidates.forEach(candidate => {
+          for (let index = 0; index < pool.length; index += 1) {
+            if (candidate.mask & (1 << index)) byIndex[index].push(candidate);
+          }
+        });
+        byIndex.forEach(list => list.sort((a, b) => b.size - a.size || b.score - a.score));
+
+        const allMask = (1 << pool.length) - 1;
+        const solutions = [];
+        const seen = new Set();
+        const maxSolutions = options.maxSolutions || 6;
+
+        const dfs = (usedMask, selected) => {
+          if (solutions.length >= maxSolutions) return;
+          if (usedMask === allMask) {
+            const mappedGroups = selected.map(candidate => normalizeGroupTiles(candidate.tiles));
+            const signature = serializeTableState(mappedGroups);
+            if (seen.has(signature)) return;
+            seen.add(signature);
+            solutions.push({
+              groups: mappedGroups,
+              score: selected.reduce((sum, candidate) => sum + candidate.score, 0),
+              signature
+            });
+            return;
+          }
+
+          let firstOpen = -1;
+          for (let index = 0; index < pool.length; index += 1) {
+            if ((usedMask & (1 << index)) === 0) {
+              firstOpen = index;
+              break;
+            }
+          }
+          if (firstOpen < 0) return;
+
+          for (const candidate of byIndex[firstOpen]) {
+            if ((candidate.mask & usedMask) !== 0) continue;
+            selected.push(candidate);
+            dfs(usedMask | candidate.mask, selected);
+            selected.pop();
+            if (solutions.length >= maxSolutions) return;
+          }
+        };
+
+        dfs(0, []);
+        solutions.sort((a, b) => b.score - a.score || b.groups.length - a.groups.length);
+        return solutions;
+      }
+    }
+
+    class AIBaseStrategy {
+      constructor(level, config) {
+        this.level = level;
+        this.config = config;
+      }
+
+      chooseMove(gameState) {
+        const initialState = {
+          rack: deepCopy(gameState.currentPlayer.rack),
+          table: normalizeTableGroups(deepCopy(gameState.table)),
+          opened: gameState.currentPlayer.opened,
+          baseTableCount: gameState.table.length,
+          actions: [],
+          stats: {
+            actionScore: 0,
+            newGroupCount: 0,
+            appendCount: 0,
+            rearrangeCount: 0,
+            touchedGroups: 0,
+            jokerRelocationCount: 0,
+            jokerEfficiency: 0,
+            jokerTrap: 0
+          },
+          meta: {
+            openingGroups: [],
+            openingSummaries: [],
+            jokerNotes: []
+          }
+        };
+
+        const ctx = {
+          gameState,
+          startedAt: Date.now(),
+          rackGroupCache: new Map(),
+          poolGroupCache: new Map(),
+          initialRackSize: initialState.rack.length,
+          initialTableSize: initialState.table.length,
+          initialJokerCount: initialState.rack.filter(tile => tile.joker).length
+        };
+
+        let best = null;
+        let frontier = [initialState];
+        const seen = new Map();
+
+        for (let depth = 1; depth <= this.config.maxDepth; depth += 1) {
+          if (this.isTimedOut(ctx)) break;
+          const nextFrontier = [];
+
+          for (const state of frontier) {
+            const candidates = this.generateCandidates(state, ctx);
+            for (const candidate of candidates) {
+              if (this.isTimedOut(ctx)) break;
+              const key = RummyAIUtils.serializeState(candidate);
+              const value = this.scoreCandidate(candidate, ctx);
+              if (seen.has(key) && seen.get(key) >= value) continue;
+              seen.set(key, value);
+              candidate.evalScore = value;
+
+              if (this.canFinishTurn(candidate, ctx)) {
+                candidate.finalScore = this.evaluateState(candidate, ctx, true);
+                if (!best || candidate.finalScore > best.finalScore) {
+                  best = candidate;
+                }
+              }
+              nextFrontier.push(candidate);
+            }
+            if (this.isTimedOut(ctx)) break;
+          }
+
+          if (nextFrontier.length === 0) break;
+          nextFrontier.sort((a, b) => b.evalScore - a.evalScore);
+          frontier = nextFrontier.slice(0, this.config.beamWidth);
+        }
+
+        if (!best) return null;
+        return this.buildMove(best, ctx);
+      }
+
+      isTimedOut(ctx) {
+        return this.config.timeLimitMs && (Date.now() - ctx.startedAt) >= this.config.timeLimitMs;
+      }
+
+      modeEnabled(mode) {
+        const current = this.config.rearrangeMode || "";
+        return current.split("+").includes(mode);
+      }
+
+      updateOpenedState(state, ctx) {
+        if (state.opened || !ctx.gameState.ruleOptions.initial30) return;
+        const openingGroups = state.table.slice(state.baseTableCount);
+        if (isInitialOpenSatisfied(openingGroups)) {
+          state.opened = true;
+        }
+      }
+
+      countAppendableRackTiles(state) {
+        const appendable = new Set();
+        state.rack.forEach(tile => {
+          for (const group of state.table) {
+            if (RummyRules.analyzeGroup([...group, tile]).valid) {
+              appendable.add(tile.id);
+              break;
+            }
+          }
+        });
+        return appendable.size;
+      }
+
+      isOpeningPending(ctx) {
+        return ctx.gameState.ruleOptions.initial30 && !ctx.gameState.currentPlayer.opened;
+      }
+
+      describeGroups(groups) {
+        return groups.map(group => {
+          const normalized = normalizeGroupTiles(deepCopy(group));
+          const analysis = RummyRules.explainGroup(normalized);
+          return {
+            ids: normalized.map(tile => tile.id),
+            tiles: normalized,
+            score: analysis.score || 0,
+            kind: analysis.kind || null,
+            jokerAssignments: deepCopy(analysis.jokerAssignments || []),
+            canonicalNumbers: deepCopy(analysis.canonicalNumbers || [])
+          };
+        });
+      }
+
+      createRackOnlyState(state, ctx, groups, options = {}) {
+        if (!groups || groups.length === 0) return null;
+
+        const next = RummyAIUtils.cloneState(state);
+        const descriptions = this.describeGroups(groups);
+        const rackIds = new Set(descriptions.flatMap(group => group.ids));
+        next.rack = next.rack.filter(tile => !rackIds.has(tile.id));
+        next.table.push(...descriptions.map(group => deepCopy(group.tiles)));
+        next.table = normalizeTableGroups(next.table);
+
+        descriptions.forEach(group => {
+          next.actions.push({
+            type: "new-group",
+            sourceRackIds: [...group.ids],
+            createdGroupIds: [...group.ids],
+            groupScore: group.score,
+            kind: group.kind,
+            jokerAssignments: deepCopy(group.jokerAssignments),
+            canonicalNumbers: deepCopy(group.canonicalNumbers)
+          });
+        });
+
+        next.stats.actionScore += descriptions.reduce((sum, group) => sum + group.score, 0);
+        next.stats.newGroupCount += descriptions.length;
+        if (options.recordOpening) {
+          const previousGroups = deepCopy(next.meta.openingGroups || []);
+          const previousSummaries = deepCopy(next.meta.openingSummaries || []);
+          next.meta.openingGroups = [
+            ...previousGroups,
+            ...descriptions.map(group => deepCopy(group.tiles))
+          ];
+          next.meta.openingSummaries = [
+            ...previousSummaries,
+            ...descriptions.map(group => ({
+              ids: [...group.ids],
+              score: group.score,
+              kind: group.kind,
+              jokerAssignments: deepCopy(group.jokerAssignments),
+              canonicalNumbers: deepCopy(group.canonicalNumbers)
+            }))
+          ];
+        }
+        this.updateOpenedState(next, ctx);
+        return next;
+      }
+
+      getCandidateSortValue(candidate, ctx) {
+        return this.scoreCandidate(candidate, ctx);
+      }
+
+      dedupeAndSortCandidates(candidates, ctx, limit) {
+        const deduped = new Map();
+        candidates.forEach(candidate => {
+          const key = RummyAIUtils.serializeState(candidate);
+          const current = deduped.get(key);
+          const value = this.getCandidateSortValue(candidate, ctx);
+          if (!current || value > this.getCandidateSortValue(current, ctx)) {
+            deduped.set(key, candidate);
+          }
+        });
+        const ordered = [...deduped.values()].sort((a, b) =>
+          this.getCandidateSortValue(b, ctx) - this.getCandidateSortValue(a, ctx) ||
+          (b.stats.actionScore || 0) - (a.stats.actionScore || 0)
+        );
+        return typeof limit === "number" ? ordered.slice(0, limit) : ordered;
+      }
+
+      isSafeAppendCandidate(candidate) {
+        const lastAction = candidate.actions[candidate.actions.length - 1];
+        if (!lastAction || lastAction.type !== "append") return false;
+        const targetIds = new Set(lastAction.resultGroupIds || []);
+        const targetGroup = candidate.table.find(group =>
+          group.length === targetIds.size && group.every(tile => targetIds.has(tile.id))
+        );
+        return !!targetGroup && targetGroup.length >= 4;
+      }
+
+      scoreCandidate(state, ctx) {
+        if (state.previewScore === undefined) {
+          state.previewScore = this.evaluateState(state, ctx, false);
+        }
+        if (this.isOpeningPending(ctx)) {
+          const openingGroups = state.table.slice(state.baseTableCount);
+          const openingScore = calculateInitialOpenScore(openingGroups);
+          const openingSatisfied = isInitialOpenSatisfied(openingGroups);
+          const rackReduction = ctx.initialRackSize - state.rack.length;
+          return state.previewScore
+            + openingScore * 220
+            + rackReduction * 160
+            + (openingSatisfied ? 100000 : 0);
+        }
+        return state.previewScore;
+      }
+
+      pickQuota(moves, ctx, quota) {
+        if (!moves || moves.length === 0 || quota <= 0) return [];
+        moves.forEach(move => {
+          move.previewScore = this.scoreCandidate(move, ctx);
+        });
+        moves.sort((a, b) =>
+          (b.previewScore || 0) - (a.previewScore || 0) ||
+          (b.stats.actionScore || 0) - (a.stats.actionScore || 0)
+        );
+        return moves.slice(0, quota);
+      }
+
+      getProtectedRackSubsets(state, ctx, tableTiles = []) {
+        const all = RummyAIUtils.enumerateRackSubsets(state.rack, this.config.maxRackTilesForRearrange || 0);
+        if (!this.config.protectedRackSubsets) return all;
+
+        const tableIds = new Set(tableTiles.map(tile => tile.id));
+        const hasTableJoker = tableTiles.some(tile => tile.joker);
+        return all.filter(subset => {
+          const nonJokers = subset.tiles.filter(tile => !tile.joker);
+          const sameNumber = nonJokers.length > 1 && new Set(nonJokers.map(tile => tile.number)).size < nonJokers.length;
+          const nearRun = nonJokers.length > 1
+            && nonJokers.every(tile => tile.color === nonJokers[0].color)
+            && (Math.max(...nonJokers.map(tile => tile.number)) - Math.min(...nonJokers.map(tile => tile.number))) <= nonJokers.length + 1;
+          const jokerReadyRun = nonJokers.length > 1
+            && nonJokers.every(tile => tile.color === nonJokers[0].color)
+            && (Math.max(...nonJokers.map(tile => tile.number)) - Math.min(...nonJokers.map(tile => tile.number))) <= nonJokers.length + 2;
+          const hasJoker = subset.tiles.some(tile => tile.joker);
+          let bridgeable = false;
+          let jokerCompletable = false;
+          if (tableTiles.length > 0) {
+            const pool = [...subset.tiles, ...tableTiles];
+            const validGroups = RummyAIUtils.getValidGroupsFromTiles(pool, ctx.poolGroupCache, pool.length);
+            bridgeable = validGroups.some(group =>
+              subset.ids.every(id => group.ids.includes(id)) &&
+              group.ids.some(id => tableIds.has(id))
+            );
+            if (hasTableJoker) {
+              jokerCompletable = validGroups.some(group =>
+                subset.ids.every(id => group.ids.includes(id)) &&
+                group.ids.some(id => tableIds.has(id) && tableTiles.find(tile => tile.id === id)?.joker)
+              );
+            }
+          }
+          return sameNumber || nearRun || jokerReadyRun || hasJoker || bridgeable || jokerCompletable;
+        });
+      }
+
+      getRearrangementRackSubsets(state, ctx, tableTiles = []) {
+        const allowExhaustive = this.config.conditionalSubsetExhaustive
+          && state.rack.length <= (this.config.exhaustiveRackThreshold || 10)
+          && tableTiles.length <= (this.config.exhaustivePoolThreshold || 8);
+        const base = allowExhaustive
+          ? RummyAIUtils.enumerateRackSubsets(state.rack, this.config.maxRackTilesForRearrange || 0)
+          : RummyAIUtils.getRackSubsets(
+              state.rack,
+              this.config.maxRackTilesForRearrange || 0,
+              this.config.maxRackSubsetBranches || 24
+            );
+        const protectedSubsets = this.getProtectedRackSubsets(state, ctx, tableTiles);
+        const reserve = this.config.protectedRackSubsetReserve || 0;
+        const protectedMap = new Map();
+        protectedSubsets.forEach(subset => {
+          protectedMap.set(subset.ids.join("-"), subset);
+        });
+        const merged = new Map();
+        [...base, ...protectedSubsets].forEach(subset => {
+          merged.set(subset.ids.join("-"), subset);
+        });
+        const protectedOrdered = [...protectedMap.values()].sort((a, b) => b.score - a.score || b.size - a.size);
+        const selectedProtected = protectedOrdered.slice(0, reserve);
+        const reservedKeys = new Set(selectedProtected.map(subset => subset.ids.join("-")));
+        const ordered = [...merged.values()]
+          .filter(subset => !reservedKeys.has(subset.ids.join("-")))
+          .sort((a, b) => b.score - a.score || b.size - a.size);
+        const limit = this.config.maxRackSubsetBranches || 24;
+        return [
+          { ids: [], tiles: [], size: 0, score: 0 },
+          ...selectedProtected,
+          ...ordered.slice(0, Math.max(0, limit - selectedProtected.length))
+        ];
+      }
+
+      getRemovalPlans(group, ctx, options = {}) {
+        const maxRemove = options.maxRemove ?? 1;
+        const allowZero = options.allowZero || false;
+        const maxSolutions = options.maxSolutions || 2;
+        const plans = [];
+
+        if (allowZero) {
+          plans.push({
+            removedTiles: [],
+            remainingGroups: [normalizeGroupTiles(group)],
+            score: RummyRules.analyzeGroup(group).score || 0
+          });
+        }
+
+        const total = 1 << group.length;
+        for (let mask = 1; mask < total; mask += 1) {
+          const removedCount = RummyAIUtils.popcount(mask);
+          if (removedCount === 0 || removedCount > maxRemove || removedCount >= group.length) continue;
+          const removedTiles = [];
+          const remainingTiles = [];
+          for (let index = 0; index < group.length; index += 1) {
+            if (mask & (1 << index)) removedTiles.push(group[index]);
+            else remainingTiles.push(group[index]);
+          }
+          if (!this.config.allowJokerRemoval && removedTiles.some(tile => tile.joker)) continue;
+          if (remainingTiles.length > 0 && remainingTiles.length < 3) continue;
+
+          const partitions = remainingTiles.length === 0
+            ? [{ groups: [], score: 0 }]
+            : RummyAIUtils.findExactCoverPartitions(remainingTiles, ctx.poolGroupCache, { maxSolutions });
+          if (partitions.length === 0) continue;
+
+          partitions.slice(0, maxSolutions).forEach(partition => {
+            plans.push({
+              removedTiles,
+              remainingGroups: partition.groups,
+              score: (partition.score || 0) + removedTiles.length * 12
+            });
+          });
+        }
+
+        const seen = new Set();
+        return plans
+          .filter(plan => {
+            const key = `${plan.removedTiles.map(tile => tile.id).sort((a, b) => a - b).join(",")}::${serializeTableState(plan.remainingGroups)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .sort((a, b) => b.score - a.score || b.removedTiles.length - a.removedTiles.length)
+          .slice(0, this.config.maxRemovalPlanBranches || 8);
+      }
+
+      createRearrangedState(state, ctx, options) {
+        const next = RummyAIUtils.cloneState(state);
+        const sourceGroupIndices = options.sourceGroupIndices || [];
+        const retainedGroups = options.retainedGroups || [];
+        const createdGroups = options.createdGroups || [];
+        const sourceRackIds = options.sourceRackIds || [];
+        const sourceTableIds = options.sourceTableIds || [];
+        const statBoost = options.statBoost || {};
+
+        const comboSet = new Set(sourceGroupIndices);
+        next.table = next.table.filter((_, index) => !comboSet.has(index));
+        next.table.push(...deepCopy(retainedGroups), ...deepCopy(createdGroups));
+        next.table = normalizeTableGroups(next.table);
+
+        if (sourceRackIds.length > 0) {
+          const rackIdSet = new Set(sourceRackIds);
+          next.rack = next.rack.filter(tile => !rackIdSet.has(tile.id));
+        }
+
+        const sameRack = next.rack.length === state.rack.length
+          && next.rack.every((tile, index) => tile.id === state.rack[index].id);
+        const sameTable = serializeTableState(next.table) === serializeTableState(state.table);
+        if (sameRack && sameTable) return null;
+
+        const resultGroups = [...retainedGroups, ...createdGroups].map(group => group.map(tile => tile.id));
+        next.actions.push({
+          type: "rearrange",
+          mode: options.mode || "bridge",
+          sourceRackIds: [...sourceRackIds],
+          sourceTableIds: [...sourceTableIds],
+          sourceGroupIndices: [...sourceGroupIndices],
+          resultGroupIds: resultGroups,
+          detailText: options.detailText || "",
+          jokerAssignments: deepCopy(options.jokerAssignments || [])
+        });
+        next.stats.actionScore += [...retainedGroups, ...createdGroups]
+          .reduce((sum, group) => sum + (RummyRules.explainGroup(group).score || 0), 0);
+        next.stats.rearrangeCount += 1;
+        next.stats.touchedGroups += sourceGroupIndices.length;
+        next.stats.jokerRelocationCount += statBoost.jokerRelocationCount || 0;
+        next.stats.jokerEfficiency += statBoost.jokerEfficiency || 0;
+        next.stats.jokerTrap += statBoost.jokerTrap || 0;
+        if (options.jokerNote) {
+          next.meta.jokerNotes = [...(next.meta.jokerNotes || []), options.jokerNote];
+        }
+        this.updateOpenedState(next, ctx);
+        return next;
+      }
+
+      canFinishTurn(state, ctx) {
+        if (state.rack.length === ctx.initialRackSize) return false;
+        if (state.table.some(group => !RummyRules.analyzeGroup(group).valid)) return false;
+
+        const { ruleOptions, currentPlayer } = ctx.gameState;
+        if (!ruleOptions.initial30 || currentPlayer.opened) return true;
+
+        const openingGroups = state.table.slice(state.baseTableCount);
+        return isInitialOpenSatisfied(openingGroups);
+      }
+
+      evaluateState(state, ctx, terminal) {
+        const rackReduction = ctx.initialRackSize - state.rack.length;
+        const rackGroups = RummyAIUtils.getValidGroupsFromTiles(state.rack, ctx.rackGroupCache, state.rack.length);
+        const coverableIds = new Set();
+        rackGroups.slice(0, 24).forEach(group => group.ids.forEach(id => coverableIds.add(id)));
+        const orphanCount = state.rack.length - coverableIds.size;
+        const remainingJokers = state.rack.filter(tile => tile.joker).length;
+        const usedJokers = ctx.initialJokerCount - remainingJokers;
+        const groupDelta = state.table.length - ctx.initialTableSize;
+        const smallestOpponentRack = Math.min(
+          ...ctx.gameState.playersMeta
+            .filter((_, index) => index !== ctx.gameState.turnIndex)
+            .map(player => player.rackCount)
+        );
+        const raceAdvantage = smallestOpponentRack - state.rack.length;
+        const appendableRackCount = this.countAppendableRackTiles(state);
+        const stableGroups = state.table.filter(group => group.length >= 4 && RummyRules.analyzeGroup(group).valid).length;
+        const fragileGroups = state.table.filter(group => group.length === 3 && RummyRules.analyzeGroup(group).valid).length;
+        const bridgeCompletion = state.stats.rearrangeCount > 0 ? Math.max(0, rackReduction) : 0;
+        const entropyPenalty = Math.max(0, state.stats.touchedGroups * 2 - rackReduction - Math.max(0, groupDelta));
+
+        let score = 0;
+        if (state.rack.length === 0) score += 10000;
+        score += rackReduction * this.config.weights.rackReduction;
+        score += state.stats.actionScore * this.config.weights.actionScore;
+        score += state.stats.newGroupCount * this.config.weights.newGroup;
+        score += state.stats.appendCount * this.config.weights.append;
+        score += state.stats.rearrangeCount * this.config.weights.rearrange;
+        score += groupDelta * this.config.weights.groupDelta;
+        score += coverableIds.size * this.config.weights.coverage;
+        score += remainingJokers * this.config.weights.jokerKeep;
+        score -= usedJokers * this.config.weights.jokerSpend;
+        score -= orphanCount * this.config.weights.orphan;
+        score -= state.stats.touchedGroups * this.config.weights.tableRisk;
+        score += raceAdvantage * this.config.weights.race;
+        score += appendableRackCount * (this.config.weights.futureMobility || 0);
+        score += stableGroups * (this.config.weights.stableSplit || 0);
+        score += bridgeCompletion * (this.config.weights.bridge || 0);
+        score += state.stats.jokerRelocationCount * (this.config.weights.jokerRelocation || 0);
+        score += state.stats.jokerEfficiency * (this.config.weights.jokerEfficiency || 0);
+        score -= fragileGroups * (this.config.weights.fragile || 0);
+        score -= entropyPenalty * (this.config.weights.entropy || 0);
+        score -= state.stats.jokerTrap * (this.config.weights.jokerTrap || 0);
+
+        if (ctx.gameState.ruleOptions.initial30 && !ctx.gameState.currentPlayer.opened) {
+          const openingGroups = state.table.slice(state.baseTableCount);
+          const openingScore = calculateInitialOpenScore(openingGroups);
+          score += Math.min(openingScore, 30) * this.config.weights.openingProgress;
+          if (isInitialOpenSatisfied(openingGroups)) {
+            score += this.config.weights.openingComplete;
+          } else if (terminal) {
+            score -= 5000;
+          }
+        }
+
+        return score;
+      }
+
+      buildMove(state, ctx) {
+        const { ruleOptions, currentPlayer } = ctx.gameState;
+        const openingGroups = state.table.slice(state.baseTableCount);
+        const openingDetails = (state.meta.openingSummaries && state.meta.openingSummaries.length > 0)
+          ? state.meta.openingSummaries.map((group, index) => ({
+              ...deepCopy(group),
+              tiles: deepCopy(state.meta.openingGroups?.[index] || [])
+            }))
+          : this.describeGroups(openingGroups);
+        const opened = currentPlayer.opened || !ruleOptions.initial30 || isInitialOpenSatisfied(openingGroups);
+        const openingScore = calculateInitialOpenScore(openingGroups);
+        const rackReduction = ctx.initialRackSize - state.rack.length;
+        const futureMobility = this.countAppendableRackTiles(state);
+        const stableGroups = state.table.filter(group => group.length >= 4 && RummyRules.analyzeGroup(group).valid).length;
+        const fragileGroups = state.table.filter(group => group.length === 3 && RummyRules.analyzeGroup(group).valid).length;
+        let summary = `타일 ${rackReduction}장`;
+        if (state.stats.rearrangeCount > 0) summary = `재배열 ${rackReduction}장`;
+        else if (state.stats.newGroupCount > 1) summary = `복수 줄 ${rackReduction}장`;
+        else if (state.stats.appendCount > 0 && state.stats.newGroupCount === 0) summary = "줄 추가";
+        else if (state.stats.newGroupCount > 0) summary = `새 줄 ${rackReduction}장`;
+
+        return {
+          type: state.stats.rearrangeCount > 0 ? "rearrange" : state.stats.newGroupCount > 0 ? "new-group" : "append",
+          rack: deepCopy(state.rack),
+          table: normalizeTableGroups(deepCopy(state.table)),
+          opened,
+          summary,
+          score: state.finalScore || state.evalScore || 0,
+          rackReduction,
+          openingScore,
+          openingDetails: deepCopy(openingDetails),
+          futureMobility,
+          stableGroups,
+          fragileGroups,
+          jokerNotes: deepCopy(state.meta.jokerNotes || []),
+          actions: deepCopy(state.actions),
+          stats: deepCopy(state.stats)
+        };
+      }
+
+      generateCandidates(state, ctx) {
+        if (this.isOpeningPending(ctx) && !state.opened) {
+          const openingMoves = this.generateOpeningMoves(state, ctx);
+          return this.pickQuota(
+            openingMoves,
+            ctx,
+            this.config.openingQuota ?? this.config.maxBranchesPerState
+          );
+        }
+
+        const rackMoves = this.generateRackGroupMoves(state, ctx);
+        const appendMoves = this.generateAppendMoves(state, ctx);
+        const safeAppendMoves = appendMoves.filter(candidate => this.isSafeAppendCandidate(candidate));
+        const safeKeys = new Set(safeAppendMoves.map(candidate => RummyAIUtils.serializeState(candidate)));
+        const regularAppendMoves = appendMoves.filter(candidate => !safeKeys.has(RummyAIUtils.serializeState(candidate)));
+
+        const baselineMoves = this.dedupeAndSortCandidates([
+          ...this.pickQuota(rackMoves, ctx, this.config.newGroupQuota ?? this.config.maxBranchesPerState),
+          ...this.pickQuota(safeAppendMoves, ctx, this.config.safeAppendQuota ?? this.config.appendQuota ?? this.config.maxBranchesPerState),
+          ...this.pickQuota(regularAppendMoves, ctx, this.config.appendQuota ?? this.config.maxBranchesPerState)
+        ], ctx, this.config.maxBranchesPerState);
+
+        if (!this.config.allowRearrange || !state.opened) {
+          return baselineMoves;
+        }
+
+        const advancedMoves = this.generateRearrangementMoves(state, ctx);
+        return this.dedupeAndSortCandidates([
+          ...baselineMoves,
+          ...this.pickQuota(advancedMoves, ctx, this.config.rearrangeQuota ?? this.config.maxBranchesPerState)
+        ], ctx, this.config.maxBranchesPerState);
+      }
+
+      generateOpeningMoves(state, ctx) {
+        const groups = RummyAIUtils.getValidGroupsFromTiles(
+          state.rack,
+          ctx.rackGroupCache,
+          state.rack.length
+        ).slice(0, this.config.maxOpeningGroupBranches || this.config.maxRackGroupBranches || 20);
+        if (groups.length === 0) return [];
+
+        const rackIndexById = new Map(state.rack.map((tile, index) => [tile.id, index]));
+        const candidates = groups.map(group => {
+          let mask = 0;
+          group.ids.forEach(id => {
+            mask |= 1 << rackIndexById.get(id);
+          });
+          return { ...group, mask };
+        });
+        const byIndex = Array.from({ length: state.rack.length }, () => []);
+        candidates.forEach(candidate => {
+          for (let index = 0; index < state.rack.length; index += 1) {
+            if (candidate.mask & (1 << index)) byIndex[index].push(candidate);
+          }
+        });
+        byIndex.forEach(list => list.sort((a, b) => b.score - a.score || b.size - a.size));
+
+        const seen = new Set();
+        const combos = [];
+        const maxSolutions = this.config.maxOpeningSolutions || 24;
+
+        const recordCombo = (selected) => {
+          if (selected.length === 0) return;
+          const groupsToCreate = selected.map(candidate => normalizeGroupTiles(deepCopy(candidate.tiles)));
+          const signature = serializeTableState(groupsToCreate);
+          if (seen.has(signature)) return;
+          seen.add(signature);
+          combos.push({
+            groups: groupsToCreate,
+            score: selected.reduce((sum, candidate) => sum + (candidate.score || 0), 0),
+            rackReduction: selected.reduce((sum, candidate) => sum + candidate.size, 0),
+            jokerCount: selected.reduce((sum, candidate) => sum + candidate.jokerCount, 0)
+          });
+        };
+
+        const dfs = (usedMask, selected, depth) => {
+          if (this.isTimedOut(ctx) || combos.length >= maxSolutions * 2) return;
+          if (selected.length > 0) recordCombo(selected);
+          if (depth >= (this.config.maxOpeningGroups || 1)) return;
+
+          let firstOpen = -1;
+          for (let index = 0; index < state.rack.length; index += 1) {
+            if ((usedMask & (1 << index)) === 0) {
+              firstOpen = index;
+              break;
+            }
+          }
+          if (firstOpen < 0) return;
+
+          for (const candidate of byIndex[firstOpen]) {
+            if ((candidate.mask & usedMask) !== 0) continue;
+            selected.push(candidate);
+            dfs(usedMask | candidate.mask, selected, depth + 1);
+            selected.pop();
+            if (this.isTimedOut(ctx) || combos.length >= maxSolutions * 2) return;
+          }
+
+          dfs(usedMask | (1 << firstOpen), selected, depth);
+        };
+
+        dfs(0, [], 0);
+
+        const ordered = combos
+          .sort((a, b) =>
+            Number(b.score >= 30) - Number(a.score >= 30) ||
+            b.rackReduction - a.rackReduction ||
+            b.score - a.score ||
+            a.jokerCount - b.jokerCount
+          )
+          .slice(0, maxSolutions);
+
+        return ordered
+          .map(combo => this.createRackOnlyState(state, ctx, combo.groups, { recordOpening: true }))
+          .filter(Boolean);
+      }
+
+      generateRackGroupMoves(state, ctx) {
+        const groups = RummyAIUtils.getValidGroupsFromTiles(state.rack, ctx.rackGroupCache, state.rack.length)
+          .slice(0, this.config.maxRackGroupBranches);
+        const moves = [];
+
+        groups.forEach(group => {
+          const next = this.createRackOnlyState(state, ctx, [group.tiles]);
+          if (next) moves.push(next);
+        });
+
+        return moves;
+      }
+
+      generateAppendMoves(state, ctx) {
+        const moves = [];
+        const allowBaseTable = state.opened || !ctx.gameState.ruleOptions.initial30;
+
+        for (let groupIndex = 0; groupIndex < state.table.length; groupIndex += 1) {
+          if (!allowBaseTable && groupIndex < state.baseTableCount) continue;
+          for (const tile of state.rack) {
+            const candidate = [...state.table[groupIndex], tile];
+            const result = RummyRules.analyzeGroup(candidate);
+            if (!result.valid) continue;
+
+            const next = RummyAIUtils.cloneState(state);
+            const rackIndex = next.rack.findIndex(current => current.id === tile.id);
+            if (rackIndex < 0) continue;
+            const [movedTile] = next.rack.splice(rackIndex, 1);
+            next.table[groupIndex].push(movedTile);
+            next.table[groupIndex] = normalizeGroupTiles(next.table[groupIndex]);
+            next.actions.push({
+              type: "append",
+              sourceRackIds: [tile.id],
+              targetGroupIndex: groupIndex,
+              resultGroupIds: next.table[groupIndex].map(current => current.id)
+            });
+            next.stats.actionScore += result.score || 0;
+            next.stats.appendCount += 1;
+            this.updateOpenedState(next, ctx);
+            moves.push(next);
+          }
+        }
+
+        return moves;
+      }
+
+      generateSingleGroupSplitMoves(state, ctx) {
+        const candidates = [];
+        const maxRemove = this.config.maxRemovedPerGroup || 1;
+
+        for (let groupIndex = 0; groupIndex < state.table.length; groupIndex += 1) {
+          const group = state.table[groupIndex];
+          if (group.length < 4 || group.length > (this.config.maxSplitGroupSize || 8)) continue;
+          const plans = this.getRemovalPlans(group, ctx, { maxRemove, maxSolutions: 2 });
+          for (const plan of plans) {
+            if (this.isTimedOut(ctx)) break;
+            if (plan.removedTiles.length === 0) continue;
+            const rackSubsets = this.getRearrangementRackSubsets(state, ctx, plan.removedTiles);
+            for (const subset of rackSubsets) {
+              if (this.isTimedOut(ctx)) break;
+              if (subset.size === 0) continue;
+              const pool = [...plan.removedTiles, ...subset.tiles];
+              if (pool.length < 3 || pool.length > (this.config.maxPoolTiles || 8)) continue;
+              const result = RummyRules.explainGroup(pool);
+              if (!result.valid) continue;
+              const sourceAnalysis = RummyRules.explainGroup(group);
+              const removedJoker = plan.removedTiles.find(tile => tile.joker);
+              const sourceRole = removedJoker
+                ? (sourceAnalysis.jokerAssignments || []).find(entry => entry.tileId === removedJoker.id)
+                : null;
+              const targetRole = removedJoker
+                ? (result.jokerAssignments || []).find(entry => entry.tileId === removedJoker.id)
+                : null;
+              const jokerNote = removedJoker
+                ? (sourceRole && targetRole
+                    ? `${groupIndex + 1}번 줄의 조커를 ${sourceRole.actsAsNumber} 역할에서 빼서 ${targetRole.actsAsNumber} 역할 새 줄로 옮기세요.`
+                    : `${groupIndex + 1}번 줄의 조커를 새 줄 완성용으로 옮기세요.`)
+                : "";
+              const candidate = this.createRearrangedState(state, ctx, {
+                mode: "single",
+                sourceGroupIndices: [groupIndex],
+                sourceTableIds: plan.removedTiles.map(tile => tile.id),
+                sourceRackIds: subset.ids,
+                retainedGroups: plan.remainingGroups,
+                createdGroups: [normalizeGroupTiles(pool)],
+                detailText: jokerNote,
+                jokerAssignments: deepCopy(result.jokerAssignments || []),
+                jokerNote,
+                statBoost: removedJoker
+                  ? {
+                      jokerRelocationCount: 1,
+                      jokerEfficiency: Math.max(1, 5 - pool.length),
+                      jokerTrap: pool.length === 3 ? 1 : 0
+                    }
+                  : {}
+              });
+              if (candidate) candidates.push(candidate);
+            }
+          }
+        }
+
+        return candidates;
+      }
+
+      generateDualGroupBridgeMoves(state, ctx) {
+        const candidates = [];
+        const combos = RummyAIUtils.getTableGroupCombos(
+          state.table,
+          Math.min(this.config.maxTouchedGroups || 2, 2),
+          this.config.maxGroupComboBranches || 8
+        ).filter(combo => combo.indices.length === 2);
+
+        for (const combo of combos) {
+          if (this.isTimedOut(ctx)) break;
+          const [firstIndex, secondIndex] = combo.indices;
+          const firstPlans = this.getRemovalPlans(state.table[firstIndex], ctx, {
+            maxRemove: this.config.maxRemovedPerGroup || 1,
+            maxSolutions: 2,
+            allowZero: true
+          });
+          const secondPlans = this.getRemovalPlans(state.table[secondIndex], ctx, {
+            maxRemove: this.config.maxRemovedPerGroup || 1,
+            maxSolutions: 2,
+            allowZero: true
+          });
+
+          for (const firstPlan of firstPlans) {
+            if (this.isTimedOut(ctx)) break;
+            for (const secondPlan of secondPlans) {
+              if (this.isTimedOut(ctx)) break;
+              const removedTiles = [...firstPlan.removedTiles, ...secondPlan.removedTiles];
+              if (removedTiles.length === 0 || removedTiles.length > (this.config.maxRemovedTableTiles || 3)) continue;
+              const rackSubsets = this.getRearrangementRackSubsets(state, ctx, removedTiles);
+              for (const subset of rackSubsets) {
+                if (this.isTimedOut(ctx)) break;
+                const pool = [...removedTiles, ...subset.tiles];
+                if (pool.length < 3 || pool.length > (this.config.maxPoolTiles || 10)) continue;
+                const partitions = RummyAIUtils.findExactCoverPartitions(pool, ctx.poolGroupCache, {
+                  maxSolutions: this.config.maxPartitionSolutionsBridge || 4
+                });
+                const removedJoker = removedTiles.find(tile => tile.joker);
+                partitions.slice(0, this.config.maxPartitionSolutionsBridge || 4).forEach(partition => {
+                  const targetWithJoker = removedJoker
+                    ? partition.groups.find(group => group.some(tile => tile.id === removedJoker.id))
+                    : null;
+                  const targetAnalysis = targetWithJoker ? RummyRules.explainGroup(targetWithJoker) : null;
+                  const targetRole = removedJoker && targetAnalysis
+                    ? (targetAnalysis.jokerAssignments || []).find(entry => entry.tileId === removedJoker.id)
+                    : null;
+                  const jokerNote = removedJoker
+                    ? `${combo.indices.map(index => `${index + 1}번 줄`).join(", ")}에서 뺀 조커를 ${targetRole?.actsAsNumber || "새"} 역할 줄로 재배치하세요.`
+                    : "";
+                  const candidate = this.createRearrangedState(state, ctx, {
+                    mode: "bridge",
+                    sourceGroupIndices: combo.indices,
+                    sourceTableIds: removedTiles.map(tile => tile.id),
+                    sourceRackIds: subset.ids,
+                    retainedGroups: [...firstPlan.remainingGroups, ...secondPlan.remainingGroups],
+                    createdGroups: partition.groups,
+                    detailText: jokerNote,
+                    jokerAssignments: deepCopy(targetAnalysis?.jokerAssignments || []),
+                    jokerNote,
+                    statBoost: removedJoker
+                      ? {
+                          jokerRelocationCount: 1,
+                          jokerEfficiency: Math.max(1, 5 - (targetWithJoker?.length || 4)),
+                          jokerTrap: targetWithJoker?.length === 3 ? 1 : 0
+                        }
+                      : {}
+                  });
+                  if (candidate) candidates.push(candidate);
+                });
+              }
+            }
+          }
+        }
+
+        return candidates;
+      }
+
+      generateJokerGapRunMoves(state, ctx) {
+        const candidates = [];
+
+        for (let groupIndex = 0; groupIndex < state.table.length; groupIndex += 1) {
+          if (this.isTimedOut(ctx)) break;
+          const group = state.table[groupIndex];
+          const sourceAnalysis = RummyRules.explainGroup(group);
+          const jokerTiles = group.filter(tile => tile.joker);
+          if (jokerTiles.length === 0 || !sourceAnalysis.valid) continue;
+
+          for (const jokerTile of jokerTiles) {
+            const remainingTiles = group.filter(tile => tile.id !== jokerTile.id);
+            if (remainingTiles.length < 3) continue;
+
+            const retainedPartitions = RummyAIUtils.findExactCoverPartitions(remainingTiles, ctx.poolGroupCache, {
+              maxSolutions: 2
+            });
+            if (retainedPartitions.length === 0) continue;
+
+            const protectedSubsets = this.getProtectedRackSubsets(state, ctx, [jokerTile])
+              .filter(subset => subset.size >= 2 && subset.size <= Math.max(3, this.config.maxRackTilesForRearrange || 3));
+
+            for (const subset of protectedSubsets) {
+              if (this.isTimedOut(ctx)) break;
+              const nonJokers = subset.tiles.filter(tile => !tile.joker);
+              if (nonJokers.length < 2) continue;
+
+              const sameNumber = new Set(nonJokers.map(tile => tile.number)).size === 1;
+              const sameColor = nonJokers.every(tile => tile.color === nonJokers[0].color);
+              const numbers = nonJokers.map(tile => tile.number).sort((a, b) => a - b);
+              const span = numbers[numbers.length - 1] - numbers[0];
+              const gapRun = sameColor && (
+                (nonJokers.length === 2 && (span === 1 || span === 2)) ||
+                (nonJokers.length >= 3 && span <= nonJokers.length)
+              );
+              const gapSet = sameNumber && new Set(nonJokers.map(tile => tile.color)).size === nonJokers.length;
+              if (!gapRun && !gapSet) continue;
+
+              const targetGroup = normalizeGroupTiles([jokerTile, ...subset.tiles]);
+              const targetAnalysis = RummyRules.explainGroup(targetGroup);
+              if (!targetAnalysis.valid) continue;
+
+              const targetRole = (targetAnalysis.jokerAssignments || []).find(entry => entry.tileId === jokerTile.id);
+              if (!targetRole) continue;
+
+              retainedPartitions.slice(0, 2).forEach(partition => {
+                const detailText = gapRun
+                  ? `${formatTileList(nonJokers)} 사이의 빈 칸을 조커로 메워 새 런을 만드세요.`
+                  : `${formatTileList(nonJokers)}에 조커를 더해 새 세트를 만드세요.`;
+                const candidate = this.createRearrangedState(state, ctx, {
+                  mode: "joker-gap",
+                  sourceGroupIndices: [groupIndex],
+                  sourceTableIds: [jokerTile.id],
+                  sourceRackIds: subset.ids,
+                  retainedGroups: partition.groups,
+                  createdGroups: [targetGroup],
+                  detailText,
+                  jokerAssignments: deepCopy(targetAnalysis.jokerAssignments || []),
+                  jokerNote: `${groupIndex + 1}번 줄의 조커를 ${targetRole.actsAsNumber} 역할 gap 완성용으로 옮기세요.`,
+                  statBoost: {
+                    jokerRelocationCount: 1,
+                    jokerEfficiency: 2 + Math.max(0, 3 - subset.size),
+                    jokerTrap: targetGroup.length === 3 ? 1 : 0
+                  }
+                });
+                if (candidate) candidates.push(candidate);
+              });
+            }
+          }
+        }
+
+        return candidates;
+      }
+
+      generateJokerRelocationMoves(state, ctx) {
+        const candidates = [];
+
+        for (let groupIndex = 0; groupIndex < state.table.length; groupIndex += 1) {
+          if (this.isTimedOut(ctx)) break;
+          const group = state.table[groupIndex];
+          const sourceAnalysis = RummyRules.explainGroup(group);
+          const jokerTiles = group.filter(tile => tile.joker);
+          if (jokerTiles.length === 0 || !sourceAnalysis.valid) continue;
+
+          for (const jokerTile of jokerTiles) {
+            const remainingTiles = group.filter(tile => tile.id !== jokerTile.id);
+            if (remainingTiles.length < 3) continue;
+
+            const remainingPartitions = RummyAIUtils.findExactCoverPartitions(remainingTiles, ctx.poolGroupCache, {
+              maxSolutions: 2
+            });
+            if (remainingPartitions.length === 0) continue;
+
+            const rackSubsets = this.getRearrangementRackSubsets(state, ctx, [jokerTile])
+              .filter(subset => subset.size >= 2);
+
+            for (const subset of rackSubsets) {
+              if (this.isTimedOut(ctx)) break;
+              const targetGroup = normalizeGroupTiles([jokerTile, ...subset.tiles]);
+              const targetAnalysis = RummyRules.explainGroup(targetGroup);
+              if (!targetAnalysis.valid) continue;
+
+              const sourceRole = (sourceAnalysis.jokerAssignments || []).find(entry => entry.tileId === jokerTile.id);
+              const targetRole = (targetAnalysis.jokerAssignments || []).find(entry => entry.tileId === jokerTile.id);
+              const createdFragile = targetGroup.length === 3 ? 1 : 0;
+
+              remainingPartitions.slice(0, 2).forEach(partition => {
+                const retainedGroups = partition.groups;
+                const detailText = sourceRole && targetRole
+                  ? `${groupIndex + 1}번 줄의 조커를 ${sourceRole.actsAsNumber} 역할에서 빼서 ${targetRole.actsAsNumber} 역할 새 줄로 옮기세요.`
+                  : `${groupIndex + 1}번 줄의 조커를 빼서 ${formatTileList(targetGroup)} 줄을 만드세요.`;
+
+                const candidate = this.createRearrangedState(state, ctx, {
+                  mode: "joker",
+                  sourceGroupIndices: [groupIndex],
+                  sourceTableIds: [jokerTile.id],
+                  sourceRackIds: subset.ids,
+                  retainedGroups,
+                  createdGroups: [targetGroup],
+                  detailText,
+                  jokerAssignments: deepCopy(targetAnalysis.jokerAssignments || []),
+                  jokerNote: detailText,
+                  statBoost: {
+                    jokerRelocationCount: 1,
+                    jokerEfficiency: Math.max(1, 5 - targetGroup.length),
+                    jokerTrap: createdFragile
+                  }
+                });
+                if (candidate) candidates.push(candidate);
+              });
+            }
+          }
+        }
+
+        return candidates;
+      }
+
+      generateExactCoverRearrangementMoves(state, ctx) {
+        const groupCombos = RummyAIUtils.getTableGroupCombos(
+          state.table,
+          this.config.maxTouchedGroups,
+          this.config.maxGroupComboBranches
+        );
+        const candidates = [];
+
+        for (const combo of groupCombos) {
+          if (this.isTimedOut(ctx)) break;
+          const selectedGroups = combo.indices.map(index => state.table[index]);
+          const selectedTiles = selectedGroups.flat();
+          const rackSubsets = this.getRearrangementRackSubsets(state, ctx, selectedTiles);
+
+          for (const subset of rackSubsets) {
+            if (this.isTimedOut(ctx)) break;
+            const pool = [...selectedTiles, ...subset.tiles];
+            if (pool.length > (this.config.maxPoolTiles || 12)) continue;
+
+            const partitions = RummyAIUtils.findExactCoverPartitions(pool, ctx.poolGroupCache, {
+              maxSolutions: this.config.maxPartitionSolutions
+            });
+
+            partitions.slice(0, this.config.maxPartitionSolutions || 6).forEach(partition => {
+              const candidate = this.createRearrangedState(state, ctx, {
+                mode: "exact",
+                sourceGroupIndices: combo.indices,
+                sourceTableIds: selectedTiles.map(tile => tile.id),
+                sourceRackIds: subset.ids,
+                retainedGroups: [],
+                createdGroups: partition.groups
+              });
+              if (candidate) candidates.push(candidate);
+            });
+          }
+        }
+
+        return candidates;
+      }
+
+      generateRearrangementMoves(state, ctx) {
+        const buckets = [];
+        if (this.modeEnabled("single")) {
+          buckets.push(...this.pickQuota(
+            this.generateSingleGroupSplitMoves(state, ctx),
+            ctx,
+            this.config.singleQuota ?? this.config.maxRearrangeBranches
+          ));
+        }
+        if (this.modeEnabled("bridge")) {
+          buckets.push(...this.pickQuota(
+            this.generateDualGroupBridgeMoves(state, ctx),
+            ctx,
+            this.config.bridgeQuota ?? this.config.maxRearrangeBranches
+          ));
+        }
+        if (this.modeEnabled("joker-gap")) {
+          buckets.push(...this.pickQuota(
+            this.generateJokerGapRunMoves(state, ctx),
+            ctx,
+            this.config.jokerGapQuota ?? this.config.jokerQuota ?? this.config.maxRearrangeBranches
+          ));
+        }
+        if (this.modeEnabled("joker")) {
+          buckets.push(...this.pickQuota(
+            this.generateJokerRelocationMoves(state, ctx),
+            ctx,
+            this.config.jokerRelocationQuota ?? this.config.jokerQuota ?? this.config.maxRearrangeBranches
+          ));
+        }
+        if (this.modeEnabled("exact")) {
+          buckets.push(...this.pickQuota(
+            this.generateExactCoverRearrangementMoves(state, ctx),
+            ctx,
+            this.config.exactQuota ?? this.config.maxRearrangeBranches
+          ));
+        }
+
+        return this.dedupeAndSortCandidates(buckets, ctx, this.config.maxRearrangeBranches);
+      }
+    }
+
+    class AILevel1Strategy extends AIBaseStrategy {
+      constructor() {
+        super(1, {
+          maxDepth: 1,
+          beamWidth: 1,
+          maxBranchesPerState: 10,
+          maxRackGroupBranches: 10,
+          maxAppendBranches: 10,
+          maxOpeningGroups: 1,
+          maxOpeningSolutions: 8,
+          openingQuota: 6,
+          newGroupQuota: 6,
+          safeAppendQuota: 2,
+          appendQuota: 4,
+          rearrangeQuota: 0,
+          allowRearrange: false,
+          timeLimitMs: 20,
+          weights: {
+            rackReduction: 100,
+            actionScore: 1,
+            newGroup: 20,
+            append: 12,
+            rearrange: 0,
+            groupDelta: 4,
+            coverage: 0,
+            jokerKeep: 2,
+            jokerSpend: 1,
+            orphan: 0,
+            tableRisk: 0,
+            race: 0,
+            openingProgress: 1,
+            openingComplete: 320,
+            jokerRelocation: 0,
+            jokerEfficiency: 0,
+            jokerTrap: 0
+          }
+        });
+      }
+    }
+
+    class AILevel2Strategy extends AIBaseStrategy {
+      constructor() {
+        super(2, {
+          maxDepth: 3,
+          beamWidth: 12,
+          maxBranchesPerState: 16,
+          maxRackGroupBranches: 16,
+          maxAppendBranches: 14,
+          maxOpeningGroups: 4,
+          maxOpeningSolutions: 20,
+          openingQuota: 10,
+          newGroupQuota: 8,
+          safeAppendQuota: 3,
+          appendQuota: 8,
+          rearrangeQuota: 0,
+          allowRearrange: false,
+          timeLimitMs: 30,
+          weights: {
+            rackReduction: 116,
+            actionScore: 1.16,
+            newGroup: 30,
+            append: 24,
+            rearrange: 0,
+            groupDelta: 8,
+            coverage: 5,
+            jokerKeep: 10,
+            jokerSpend: 8,
+            orphan: 6,
+            tableRisk: 0,
+            race: 2,
+            openingProgress: 1.2,
+            openingComplete: 440,
+            futureMobility: 4,
+            stableSplit: 0,
+            bridge: 0,
+            fragile: 0,
+            entropy: 0,
+            jokerRelocation: 0,
+            jokerEfficiency: 0,
+            jokerTrap: 0
+          }
+        });
+      }
+    }
+
+    class AILevel3Strategy extends AIBaseStrategy {
+      constructor() {
+        super(3, {
+          maxDepth: 3,
+          beamWidth: 14,
+          maxBranchesPerState: 18,
+          maxRackGroupBranches: 14,
+          maxAppendBranches: 12,
+          maxOpeningGroups: 4,
+          maxOpeningSolutions: 22,
+          openingQuota: 12,
+          newGroupQuota: 6,
+          safeAppendQuota: 2,
+          appendQuota: 6,
+          rearrangeQuota: 6,
+          allowRearrange: true,
+          rearrangeMode: "single",
+          maxTouchedGroups: 1,
+          maxRackTilesForRearrange: 2,
+          maxPoolTiles: 8,
+          maxGroupComboBranches: 6,
+          maxRackSubsetBranches: 18,
+          maxPartitionSolutions: 4,
+          maxPartitionSolutionsBridge: 2,
+          maxRearrangeBranches: 12,
+          maxRemovedPerGroup: 2,
+          maxRemovedTableTiles: 2,
+          maxSplitGroupSize: 8,
+          maxRemovalPlanBranches: 8,
+          allowJokerRemoval: false,
+          protectedRackSubsetReserve: 3,
+          singleQuota: 6,
+          protectedRackSubsets: true,
+          timeLimitMs: 120,
+          weights: {
+            rackReduction: 122,
+            actionScore: 1.25,
+            newGroup: 32,
+            append: 18,
+            rearrange: 84,
+            groupDelta: 10,
+            coverage: 8,
+            jokerKeep: 12,
+            jokerSpend: 18,
+            orphan: 15,
+            tableRisk: 8,
+            race: 4,
+            openingProgress: 1.3,
+            openingComplete: 470,
+            futureMobility: 10,
+            stableSplit: 14,
+            bridge: 22,
+            fragile: 8,
+            entropy: 10,
+            jokerRelocation: 0,
+            jokerEfficiency: 0,
+            jokerTrap: 0
+          }
+        });
+      }
+    }
+
+    class AILevel4Strategy extends AIBaseStrategy {
+      constructor() {
+        super(4, {
+          maxDepth: 4,
+          beamWidth: 20,
+          maxBranchesPerState: 22,
+          maxRackGroupBranches: 16,
+          maxAppendBranches: 14,
+          maxOpeningGroups: 5,
+          maxOpeningSolutions: 28,
+          openingQuota: 12,
+          newGroupQuota: 6,
+          safeAppendQuota: 3,
+          appendQuota: 5,
+          rearrangeQuota: 9,
+          allowRearrange: true,
+          rearrangeMode: "single+bridge+joker-gap+joker",
+          maxTouchedGroups: 2,
+          maxRackTilesForRearrange: 3,
+          maxPoolTiles: 10,
+          maxGroupComboBranches: 8,
+          maxRackSubsetBranches: 24,
+          maxPartitionSolutions: 6,
+          maxPartitionSolutionsBridge: 5,
+          maxRearrangeBranches: 16,
+          maxRemovedPerGroup: 2,
+          maxRemovedTableTiles: 3,
+          maxSplitGroupSize: 10,
+          maxRemovalPlanBranches: 10,
+          allowJokerRemoval: true,
+          protectedRackSubsetReserve: 5,
+          singleQuota: 4,
+          bridgeQuota: 4,
+          jokerQuota: 4,
+          jokerGapQuota: 4,
+          jokerRelocationQuota: 4,
+          protectedRackSubsets: true,
+          timeLimitMs: 240,
+          weights: {
+            rackReduction: 135,
+            actionScore: 1.35,
+            newGroup: 34,
+            append: 20,
+            rearrange: 104,
+            groupDelta: 12,
+            coverage: 12,
+            jokerKeep: 22,
+            jokerSpend: 24,
+            orphan: 20,
+            tableRisk: 6,
+            race: 8,
+            openingProgress: 1.35,
+            openingComplete: 520,
+            futureMobility: 16,
+            stableSplit: 18,
+            bridge: 28,
+            fragile: 10,
+            entropy: 8,
+            jokerRelocation: 34,
+            jokerEfficiency: 18,
+            jokerTrap: 12
+          }
+        });
+      }
+    }
+
+    class AILevel5Strategy extends AIBaseStrategy {
+      constructor() {
+        super(5, {
+          maxDepth: 5,
+          beamWidth: 30,
+          maxBranchesPerState: 26,
+          maxRackGroupBranches: 18,
+          maxAppendBranches: 16,
+          maxOpeningGroups: 6,
+          maxOpeningSolutions: 36,
+          openingQuota: 14,
+          newGroupQuota: 6,
+          safeAppendQuota: 4,
+          appendQuota: 4,
+          rearrangeQuota: 12,
+          allowRearrange: true,
+          rearrangeMode: "single+bridge+joker-gap+joker+exact",
+          maxTouchedGroups: 3,
+          maxRackTilesForRearrange: 4,
+          maxPoolTiles: 12,
+          maxGroupComboBranches: 10,
+          maxRackSubsetBranches: 32,
+          maxPartitionSolutions: 8,
+          maxPartitionSolutionsBridge: 6,
+          maxRearrangeBranches: 20,
+          maxRemovedPerGroup: 2,
+          maxRemovedTableTiles: 4,
+          maxSplitGroupSize: 12,
+          maxRemovalPlanBranches: 12,
+          allowJokerRemoval: true,
+          protectedRackSubsetReserve: 6,
+          singleQuota: 4,
+          bridgeQuota: 4,
+          jokerQuota: 6,
+          jokerGapQuota: 6,
+          jokerRelocationQuota: 4,
+          exactQuota: 3,
+          protectedRackSubsets: true,
+          conditionalSubsetExhaustive: true,
+          exhaustiveRackThreshold: 10,
+          exhaustivePoolThreshold: 10,
+          timeLimitMs: 340,
+          weights: {
+            rackReduction: 150,
+            actionScore: 1.45,
+            newGroup: 36,
+            append: 22,
+            rearrange: 122,
+            groupDelta: 14,
+            coverage: 16,
+            jokerKeep: 30,
+            jokerSpend: 30,
+            orphan: 24,
+            tableRisk: 5,
+            race: 12,
+            openingProgress: 1.4,
+            openingComplete: 580,
+            futureMobility: 22,
+            stableSplit: 22,
+            bridge: 34,
+            fragile: 12,
+            entropy: 8,
+            jokerRelocation: 44,
+            jokerEfficiency: 22,
+            jokerTrap: 14
+          }
+        });
+      }
+    }
+
+    class RummyAI {
+      static chooseMove(gameState, level) {
+        const targetLevel = Math.max(1, Math.min(5, Number(level) || 1));
+        let bestMove = null;
+        let bestLevel = 0;
+
+        for (let currentLevel = 1; currentLevel <= targetLevel; currentLevel += 1) {
+          const move = this.getStrategy(currentLevel).chooseMove(gameState);
+          if (move) move.engineLevel = currentLevel;
+          const comparison = this.compareMovePriority(move, bestMove, gameState);
+          if (comparison > 0 || (comparison === 0 && move && currentLevel > bestLevel)) {
+            bestMove = move;
+            bestLevel = currentLevel;
+          }
+        }
+
+        if (bestMove) bestMove.selectedLevel = targetLevel;
+        if (bestMove) bestMove.engineLevel = bestLevel;
+        return bestMove;
+      }
+
+      static getStrategy(level) {
+        switch (level) {
+          case 1: return new AILevel1Strategy();
+          case 2: return new AILevel2Strategy();
+          case 3: return new AILevel3Strategy();
+          case 4: return new AILevel4Strategy();
+          case 5: return new AILevel5Strategy();
+          default: return new AILevel1Strategy();
+        }
+      }
+
+      static compareMovePriority(candidate, current, gameState) {
+        const openingRequired = gameState.ruleOptions.initial30 && !gameState.currentPlayer.opened;
+        const normalize = (move) => {
+          if (!move) {
+            return {
+              valid: 0,
+              openingReady: 0,
+              rackReduction: -1,
+              stability: -999,
+              safeAppend: 0,
+              score: -Infinity
+            };
+          }
+          return {
+            valid: 1,
+            openingReady: openingRequired ? Number((move.openingScore || 0) >= 30) : 1,
+            rackReduction: move.rackReduction || 0,
+            stability: (move.stableGroups || 0) - (move.fragileGroups || 0) - ((move.stats?.touchedGroups || 0) * 0.25),
+            safeAppend: Number(move.type === "append" && (move.stats?.rearrangeCount || 0) === 0),
+            actionValue: move.stats?.actionScore || 0
+          };
+        };
+
+        const a = normalize(candidate);
+        const b = normalize(current);
+        const keys = ["valid", "openingReady", "rackReduction", "safeAppend", "stability", "actionValue"];
+        for (const key of keys) {
+          if (a[key] !== b[key]) return a[key] > b[key] ? 1 : -1;
+        }
+        return 0;
+      }
+
+      static isBetterMove(candidate, current, gameState) {
+        return this.compareMovePriority(candidate, current, gameState) > 0;
+      }
+    }
+
+    class RummyHintEngine {
+      static getHint(gameState) {
+        const move = RummyAI.chooseMove(gameState, 5);
+        if (!move) {
+          const reason = !gameState.currentPlayer.opened && gameState.ruleOptions.initial30
+            ? "아직 30점 등록 전이라 기존 테이블 재배열은 사용할 수 없습니다."
+            : gameState.table.length > 0
+              ? "현재 탐색 범위 내에서 유효한 재배열을 찾지 못했습니다."
+              : "현재 상태에서는 손패를 안전하게 줄이는 유효 수보다 드로우가 더 안정적입니다.";
+          return {
+            title: "AI-5 힌트",
+            summary: "1장 뽑기",
+            shortText: "드로우 추천",
+            reason,
+            leadText: "추천: 이번 턴은 1장 뽑기를 고려하세요.",
+            moveType: "draw",
+            score: 0,
+            rackTileIds: [],
+            tableTileIds: [],
+            targetGroupIndices: [],
+            steps: ["이번 턴은 1장 뽑기 버튼을 눌러 턴을 넘기세요."],
+            openingScore: 0
+          };
+        }
+
+        const tileLookup = new Map(
+          [...gameState.currentPlayer.rack, ...gameState.table.flat(), ...move.table.flat()].map(tile => [tile.id, tile])
+        );
+        const rackTileIds = new Set();
+        const tableTileIds = new Set();
+        const targetGroupIndices = new Set();
+        const steps = [];
+        const touchedGroupLabels = new Set();
+        const createdGroupsSummary = [];
+        const preservedGroupsSummary = [];
+        const openingBreakdown = (move.openingDetails || []).map(group => `${formatTileList(group.tiles || [])} = ${group.score}점`);
+
+        move.actions.forEach(action => {
+          const sourceRackTiles = (action.sourceRackIds || []).map(id => tileLookup.get(id)).filter(Boolean);
+          const sourceTableTiles = (action.sourceTableIds || []).map(id => tileLookup.get(id)).filter(Boolean);
+          (action.sourceGroupIndices || []).forEach(index => touchedGroupLabels.add(`${index + 1}번 줄`));
+
+          if (action.type === "new-group") {
+            (action.sourceRackIds || []).forEach(id => rackTileIds.add(id));
+            const groupIndices = findGroupIndicesByTileIds(move.table, [action.createdGroupIds]);
+            groupIndices.forEach(index => targetGroupIndices.add(index));
+            createdGroupsSummary.push(formatTileList((action.createdGroupIds || []).map(id => tileLookup.get(id)).filter(Boolean)));
+            steps.push(`손패의 ${formatTileList(sourceRackTiles)}을 선택하세요.`);
+            steps.push("새 줄 버튼을 눌러 조합을 만드세요.");
+            return;
+          }
+
+          if (action.type === "append") {
+            (action.sourceRackIds || []).forEach(id => rackTileIds.add(id));
+            const resultIndices = findGroupIndicesByTileIds(move.table, [action.resultGroupIds]);
+            resultIndices.forEach(index => targetGroupIndices.add(index));
+            const targetIndex = findGroupIndicesByTileIds(move.table, [action.resultGroupIds])[0];
+            const tileText = formatTileList(sourceRackTiles);
+            steps.push(`손패의 ${tileText}을 ${targetIndex !== undefined ? `${targetIndex + 1}번 줄` : "강조된 줄"}에 추가하세요.`);
+            return;
+          }
+
+          if (action.type === "rearrange") {
+            (action.sourceRackIds || []).forEach(id => rackTileIds.add(id));
+            (action.sourceTableIds || []).forEach(id => tableTileIds.add(id));
+            findGroupIndicesByTileIds(move.table, action.resultGroupIds || []).forEach(index => targetGroupIndices.add(index));
+            const groupText = (action.sourceGroupIndices || []).map(index => `${index + 1}번 줄`).join(", ");
+            const sourceText = sourceTableTiles.length > 0 ? formatTileList(sourceTableTiles) : "강조된 타일";
+            const rackText = sourceRackTiles.length > 0 ? ` 손패의 ${formatTileList(sourceRackTiles)}도 함께 사용하세요.` : "";
+            steps.push(`${groupText || "강조된 줄"}에서 ${sourceText}을 꺼내 재배열하세요.${rackText}`);
+            (action.resultGroupIds || []).forEach(groupIds => {
+              const targetIndex = findGroupIndicesByTileIds(move.table, [groupIds])[0];
+              const groupTiles = groupIds.map(id => tileLookup.get(id)).filter(Boolean);
+              if (groupTiles.length === 0) return;
+              if ((action.sourceTableIds || []).some(id => groupIds.includes(id))) {
+                preservedGroupsSummary.push(formatTileList(groupTiles));
+              } else {
+                createdGroupsSummary.push(formatTileList(groupTiles));
+              }
+              steps.push(`${targetIndex !== undefined ? `${targetIndex + 1}번 줄` : "결과 줄"}을 ${formatTileList(groupTiles)} 형태로 맞추세요.`);
+            });
+          }
+        });
+
+        const openingScore = move.openingScore || 0;
+        const jokerNotes = move.jokerNotes || [];
+        jokerNotes.forEach(note => {
+          if (note && !steps.includes(note)) steps.push(note);
+        });
+        if (!gameState.currentPlayer.opened && gameState.ruleOptions.initial30 && openingScore >= 30 && openingBreakdown.length > 0) {
+          steps.unshift(`합계 ${openingScore}점으로 30점 등록을 충족합니다.`);
+          openingBreakdown.slice().reverse().forEach(line => {
+            steps.unshift(line);
+          });
+        }
+        const leadText = move.type === "rearrange"
+          ? `추천: ${move.summary}으로 테이블을 재정리하세요.`
+          : move.type === "append"
+            ? "추천: 기존 줄에 1장을 추가하세요."
+            : `추천: ${move.summary} 플레이를 진행하세요.`;
+        const reason = !gameState.currentPlayer.opened && gameState.ruleOptions.initial30 && openingScore >= 30
+          ? `손패 ${move.rackReduction}장을 줄이면서 초기 등록 ${openingScore}점을 충족합니다.`
+          : move.type === "rearrange"
+            ? `손패 ${move.rackReduction}장을 줄이면서 기존 테이블을 안정적으로 유지할 수 있습니다.`
+            : move.rackReduction > 0
+              ? `이번 턴에 손패 ${move.rackReduction}장을 줄일 수 있는 최선 수입니다.`
+              : "지금 단계에서 가장 안전한 추천 수입니다.";
+        const futureBenefit = move.futureMobility > 0
+          ? `남은 손패 중 ${move.futureMobility}장은 다음 턴에도 기존 줄과 연결될 가능성이 큽니다.`
+          : "이번 수는 즉시 손패 감소에 집중한 추천입니다.";
+        const shortParts = [];
+        if (move.stats.rearrangeCount > 0) shortParts.push(`재배열 ${move.stats.rearrangeCount}회`);
+        if (move.stats.newGroupCount > 0) shortParts.push(`새 줄 ${move.stats.newGroupCount}개`);
+        if (move.stats.appendCount > 0) shortParts.push(`줄 추가 ${move.stats.appendCount}회`);
+
+        return {
+          title: "AI-5 힌트",
+          summary: move.summary,
+          shortText: shortParts.join(" · ") || move.summary,
+          reason,
+          leadText,
+          moveType: move.type,
+          score: move.score,
+          rackTileIds: [...rackTileIds],
+          tableTileIds: [...tableTileIds],
+          targetGroupIndices: [...targetGroupIndices].sort((a, b) => a - b),
+          touchedGroupLabels: [...touchedGroupLabels],
+          createdGroupsSummary,
+          preservedGroupsSummary,
+          openingBreakdown,
+          futureBenefit,
+          steps,
+          openingScore
+        };
+      }
+    }
+
+    class Game {
+      constructor() {
+        this.setupState = ["HUMAN", "HUMAN", "OFF", "OFF"];
+        this.playerAnimalIndices = [0, 1, 2, 3];
+        this.ruleOptions = {
+          jokers: false,
+          initial30: false
+        };
+        this.modeKey = "custom";
+        this.resetRound();
+      }
+
+      resetRound() {
+        this.players = [];
+        this.turn = 0;
+        this.bag = [];
+        this.table = [];
+        this.workingTable = [];
+        this.baseTableCount = 0;
+        this.selectedRackIds = new Set();
+        this.selectedTableIds = new Set();
+        this.selectedGroupIndex = null;
+        this.actionHistory = [];
+        this.drewTileThisTurn = false;
+        this.drawnTileId = null;
+        this.gameOver = false;
+        this.aiTimer = null;
+        this.lastHint = null;
+      }
+
+      get currentPlayer() {
+        return this.players[this.turn];
+      }
+
+      getTotalSelectedCount() {
+        return this.selectedRackIds.size + this.selectedTableIds.size;
+      }
+
+      ensureActiveSetupState(index, fallback = "HUMAN") {
+        if (this.setupState[index] === "OFF") {
+          this.setupState[index] = fallback;
+        }
+      }
+
+      buildGameStateForAI() {
+        return {
+          currentPlayer: {
+            rack: deepCopy(this.currentPlayer.rack),
+            opened: this.currentPlayer.opened,
+            aiLevel: this.currentPlayer.aiLevel
+          },
+          table: deepCopy(this.workingTable),
+          bagCount: this.bag.length,
+          ruleOptions: deepCopy(this.ruleOptions),
+          playersMeta: this.players.map((player, index) => ({
+            index,
+            rackCount: player.rack.length,
+            opened: player.opened,
+            type: player.type,
+            aiLevel: player.aiLevel
+          })),
+          turnIndex: this.turn
+        };
+      }
+
+      clearHint() {
+        this.lastHint = null;
+      }
+
+      quickStart(count) {
+        this.setupState = this.setupState.map((state, index) => (index < count ? state : "OFF"));
+        this.ensureActiveSetupState(0, "HUMAN");
+        if (count >= 2) this.ensureActiveSetupState(1, "HUMAN");
+        if (count >= 3) this.ensureActiveSetupState(2, "HUMAN");
+        if (count >= 4) this.ensureActiveSetupState(3, "HUMAN");
+        this.modeKey = count === 4 ? "4p" : "2p";
+        this.startFromSetup();
+      }
+
+      quickStartMixed() {
+        const defaults = ["HUMAN", "AI-1", "AI-2", "AI-3"];
+        this.setupState = this.setupState.map((state, index) => {
+          if (index >= 4) return "OFF";
+          if (index === 0) return "HUMAN";
+          if (String(state).startsWith("AI-")) return state;
+          return defaults[index];
+        });
+        this.modeKey = "mixed";
+        this.startFromSetup();
+      }
+
+      startCustom() {
+        this.modeKey = "custom";
+        this.startFromSetup();
+      }
+
+      toggleRuleOption(key) {
+        this.ruleOptions[key] = !this.ruleOptions[key];
+        ui.renderRuleOptions();
+      }
+
+      cyclePlayerAnimal(index) {
+        this.playerAnimalIndices[index] = (this.playerAnimalIndices[index] + 1) % ANIMAL_OPTIONS.length;
+        ui.renderSetup();
+      }
+
+      cycleSetupState(index) {
+        const current = this.setupState[index];
+        const currentIdx = SETUP_STATES.indexOf(current);
+        this.setupState[index] = SETUP_STATES[(currentIdx + 1) % SETUP_STATES.length];
+        ui.renderSetup();
+      }
+
+      startFromSetup() {
+        this.resetRound();
+        const players = [];
+
+        PLAYER_PRESETS.forEach((preset, idx) => {
+          const state = this.setupState[idx];
+          if (state === "OFF") return;
+          const animal = ANIMAL_OPTIONS[this.playerAnimalIndices[idx]] || ANIMAL_OPTIONS[0];
+          players.push({
+            id: idx,
+            slot: idx,
+            name: animal.name,
+            icon: animal.icon,
+            accent: preset.accent,
+            type: state === "HUMAN" ? "HUMAN" : "AI",
+            aiLevel: state.startsWith("AI-") ? Number(state.split("-")[1]) : null,
+            rack: [],
+            logs: [],
+            opened: !this.ruleOptions.initial30
+          });
+        });
+
+        if (players.length < 2) {
+          ui.toast("최소 2명은 있어야 시작할 수 있어요.");
+          return;
+        }
+
+        this.players = players;
+        this.bag = this.createBag();
+        this.players.forEach(player => {
+          player.rack = this.bag.splice(0, 14);
+          this.addLog(player, this.ruleOptions.initial30 ? "30 등록 전" : "준비 완료");
+        });
+
+        this.beginTurn();
+        ui.showScreen("game-screen");
+        ui.updateAll();
+        this.openTurn();
+      }
+
+      createBag() {
+        const bag = [];
+        let id = 1;
+        for (let copy = 0; copy < 2; copy += 1) {
+          COLORS.forEach(color => {
+            for (let num = 1; num <= 13; num += 1) {
+              bag.push({ id: id++, number: num, color: color.key });
+            }
+          });
+        }
+        if (this.ruleOptions.jokers) {
+          bag.push({ id: id++, joker: true, color: "joker" });
+          bag.push({ id: id++, joker: true, color: "joker" });
+        }
+        return this.shuffle(bag);
+      }
+
+      shuffle(list) {
+        const arr = [...list];
+        for (let i = arr.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      beginTurn() {
+        clearTimeout(this.aiTimer);
+        this.workingTable = deepCopy(this.table);
+        this.baseTableCount = this.table.length;
+        this.selectedRackIds = new Set();
+        this.selectedTableIds = new Set();
+        this.selectedGroupIndex = null;
+        this.actionHistory = [];
+        this.drewTileThisTurn = false;
+        this.drawnTileId = null;
+        this.clearHint();
+      }
+
+      openTurn() {
+        if (this.gameOver || !this.currentPlayer) return;
+
+        if (this.currentPlayer.type === "AI") {
+          if (this.ruleOptions.initial30 && !this.currentPlayer.opened) {
+            ui.setInfo("AI 개시 등록", `${this.currentPlayer.icon} ${this.currentPlayer.name}가 30점 이상 개시 멜드를 찾는 중입니다.`);
+          } else {
+            ui.setInfo("AI 행동", `${this.currentPlayer.icon} ${this.currentPlayer.name}가 조합을 찾는 중입니다.`);
+          }
+          ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name} 차례`);
+          this.aiTimer = setTimeout(() => this.performAiTurn(), 800);
+          return;
+        }
+
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened) {
+          ui.setInfo(
+            "30점 등록 턴",
+            `${this.currentPlayer.icon} ${this.currentPlayer.name}는 이번에 자기 손패만으로 30점 이상을 새 줄로 등록해야 합니다. 기존 테이블은 아직 건드릴 수 없습니다.`
+          );
+        } else {
+          ui.setInfo(
+            "플레이 가이드",
+            `${this.currentPlayer.icon} ${this.currentPlayer.name}의 손패와 테이블을 바로 확인하고 플레이하세요.`
+          );
+        }
+        ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name} 차례입니다.`);
+      }
+
+      addLog(player, message) {
+        player.logs.unshift(message);
+        if (player.logs.length > 3) player.logs.pop();
+      }
+
+      canHumanAct(action = "general") {
+        if (this.gameOver) return false;
+        if (!this.currentPlayer) return false;
+        if (this.currentPlayer.type !== "HUMAN") return false;
+        if (this.drewTileThisTurn && action !== "endTurn") {
+          ui.toast("방금 뽑은 타일을 확인한 뒤 턴 종료를 눌러주세요.");
+          return false;
+        }
+        return true;
+      }
+
+      snapshotAction() {
+        return {
+          rack: deepCopy(this.currentPlayer.rack),
+          workingTable: deepCopy(this.workingTable),
+          selectedRackIds: [...this.selectedRackIds],
+          selectedTableIds: [...this.selectedTableIds],
+          selectedGroupIndex: this.selectedGroupIndex
+        };
+      }
+
+      restoreAction(snapshot) {
+        this.currentPlayer.rack = snapshot.rack;
+        this.workingTable = snapshot.workingTable;
+        this.selectedRackIds = new Set(snapshot.selectedRackIds);
+        this.selectedTableIds = new Set(snapshot.selectedTableIds);
+        this.selectedGroupIndex = snapshot.selectedGroupIndex;
+      }
+
+      getSelectedRackTilesInOrder() {
+        return this.currentPlayer.rack.filter(tile => this.selectedRackIds.has(tile.id));
+      }
+
+      removeSelectedRackTiles() {
+        const ids = new Set(this.selectedRackIds);
+        const taken = [];
+        const remain = [];
+        this.currentPlayer.rack.forEach(tile => {
+          if (ids.has(tile.id)) taken.push(tile);
+          else remain.push(tile);
+        });
+        this.currentPlayer.rack = remain;
+        return taken;
+      }
+
+      removeSelectedTableTiles() {
+        const ids = new Set(this.selectedTableIds);
+        const taken = [];
+        this.workingTable.forEach(group => {
+          const remain = [];
+          group.forEach(tile => {
+            if (ids.has(tile.id)) taken.push(tile);
+            else remain.push(tile);
+          });
+          group.splice(0, group.length, ...remain);
+        });
+        return taken;
+      }
+
+      normalizeGroup(group) {
+        return normalizeGroupTiles(group);
+      }
+
+      normalizeWorkingTable() {
+        this.workingTable = normalizeTableGroups(this.workingTable);
+      }
+
+      sortRack(type) {
+        if (!this.canHumanAct("sort")) return;
+        const colorOrder = { red: 0, blue: 1, yellow: 2, black: 3, joker: 4 };
+        this.currentPlayer.rack.sort((a, b) => {
+          if (a.joker && b.joker) return a.id - b.id;
+          if (a.joker) return 1;
+          if (b.joker) return -1;
+          if (type === "color") {
+            return colorOrder[a.color] - colorOrder[b.color] || a.number - b.number || a.id - b.id;
+          }
+          return a.number - b.number || colorOrder[a.color] - colorOrder[b.color] || a.id - b.id;
+        });
+        ui.updateAll();
+      }
+
+      toggleRackTile(tileId) {
+        if (!this.canHumanAct("select")) return;
+        if (this.selectedRackIds.has(tileId)) this.selectedRackIds.delete(tileId);
+        else this.selectedRackIds.add(tileId);
+        ui.updateAll();
+      }
+
+      toggleTableTile(tileId, groupIndex) {
+        if (!this.canHumanAct("selectTable")) return;
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened) {
+          ui.toast("30점 등록 전에는 기존 테이블 타일을 움직일 수 없어요.");
+          return;
+        }
+        if (this.selectedTableIds.has(tileId)) this.selectedTableIds.delete(tileId);
+        else this.selectedTableIds.add(tileId);
+        ui.updateAll();
+      }
+
+      selectGroup(index) {
+        if (!this.canHumanAct("groupTarget")) return;
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened && index < this.baseTableCount) {
+          ui.toast("30점 등록 전에는 기존 테이블 줄에 붙일 수 없어요.");
+          return;
+        }
+        this.selectedGroupIndex = this.selectedGroupIndex === index ? null : index;
+        ui.updateAll();
+      }
+
+      clearSelections() {
+        if (!this.canHumanAct("clear")) return;
+        this.selectedRackIds.clear();
+        this.selectedTableIds.clear();
+        this.selectedGroupIndex = null;
+        ui.updateAll();
+      }
+
+      createGroupFromSelection() {
+        if (!this.canHumanAct("build")) return;
+        if (this.getTotalSelectedCount() === 0) {
+          ui.toast("손패나 테이블에서 타일을 먼저 선택하세요.");
+          return;
+        }
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened && this.selectedTableIds.size > 0) {
+          ui.toast("30점 등록 전에는 기존 테이블 타일을 사용할 수 없어요.");
+          return;
+        }
+
+        this.actionHistory.push(this.snapshotAction());
+        this.clearHint();
+        const movedTable = this.removeSelectedTableTiles();
+        const movedRack = this.removeSelectedRackTiles();
+        this.normalizeWorkingTable();
+        this.workingTable.push(this.normalizeGroup([...movedTable, ...movedRack]));
+        this.selectedRackIds.clear();
+        this.selectedTableIds.clear();
+        this.selectedGroupIndex = this.workingTable.length - 1;
+        ui.setInfo("새 줄 생성", "선택한 타일로 새 줄을 만들었습니다. 턴 종료 전 모든 줄이 유효한지 확인하세요.");
+        ui.updateAll();
+      }
+
+      appendSelectionToSelectedGroup() {
+        if (!this.canHumanAct("build")) return;
+        if (this.selectedGroupIndex === null || !this.workingTable[this.selectedGroupIndex]) {
+          ui.toast("먼저 추가할 줄을 선택하세요.");
+          return;
+        }
+        if (this.getTotalSelectedCount() === 0) {
+          ui.toast("손패나 테이블에서 타일을 선택하세요.");
+          return;
+        }
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened && this.selectedGroupIndex < this.baseTableCount) {
+          ui.toast("30점 등록 전에는 기존 테이블 줄에 추가할 수 없어요.");
+          return;
+        }
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened && this.selectedTableIds.size > 0) {
+          ui.toast("30점 등록 전에는 기존 테이블 타일을 사용할 수 없어요.");
+          return;
+        }
+
+        this.actionHistory.push(this.snapshotAction());
+        this.clearHint();
+        const targetGroup = this.workingTable[this.selectedGroupIndex];
+        const movedTable = this.removeSelectedTableTiles();
+        const movedRack = this.removeSelectedRackTiles();
+        targetGroup.push(...movedTable, ...movedRack);
+        this.normalizeWorkingTable();
+        this.selectedGroupIndex = this.workingTable.indexOf(targetGroup);
+        this.selectedRackIds.clear();
+        this.selectedTableIds.clear();
+        ui.setInfo("줄에 추가", "선택한 타일을 해당 줄로 이동했습니다. 필요하면 다른 줄도 계속 정리하세요.");
+        ui.updateAll();
+      }
+
+      undoTurnAction() {
+        if (!this.canHumanAct("undo")) return;
+        const snapshot = this.actionHistory.pop();
+        if (!snapshot) {
+          ui.toast("되돌릴 이번 턴 동작이 없어요.");
+          return;
+        }
+        this.clearHint();
+        this.restoreAction(snapshot);
+        ui.setInfo("무르기", "이번 턴 직전 상태로 되돌렸습니다.");
+        ui.updateAll();
+      }
+
+      drawTile() {
+        if (!this.canHumanAct("draw")) return;
+        if (this.actionHistory.length > 0) {
+          ui.toast("이미 타일을 냈다면 이번 턴에는 뽑을 수 없어요.");
+          return;
+        }
+        if (this.bag.length === 0) {
+          ui.toast("가방이 비어 있어요.");
+          return;
+        }
+
+        this.clearHint();
+        const drawn = this.bag.pop();
+        this.currentPlayer.rack.push(drawn);
+        this.drewTileThisTurn = true;
+        this.drawnTileId = drawn.id;
+        this.selectedRackIds = new Set([drawn.id]);
+        this.selectedTableIds.clear();
+        this.selectedGroupIndex = null;
+
+        ui.setInfo("1장 뽑기", "방금 뽑은 타일을 확인한 뒤 턴 종료만 눌러주세요. 다른 버튼은 잠시 비활성화됩니다.");
+        ui.updateAll();
+        ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}가 1장을 뽑았어요.`);
+
+        const rackScroller = document.querySelector(".rack-scroller");
+        if (rackScroller) {
+          requestAnimationFrame(() => {
+            rackScroller.scrollTop = rackScroller.scrollHeight;
+          });
+        }
+      }
+
+      getOpeningScore() {
+        return calculateInitialOpenScore(this.workingTable.slice(this.baseTableCount));
+      }
+
+      endTurn() {
+        if (!this.canHumanAct("endTurn")) return;
+
+        if (this.drewTileThisTurn) {
+          this.addLog(this.currentPlayer, "1장 뽑고 종료");
+          this.passTurn();
+          return;
+        }
+
+        if (this.actionHistory.length === 0) {
+          ui.toast("타일을 내지 않았다면 1장 뽑기를 사용하세요.");
+          return;
+        }
+
+        const groups = this.workingTable.filter(group => group.length > 0);
+        for (const group of groups) {
+          const result = RummyRules.analyzeGroup(group);
+          if (!result.valid) {
+            ui.toast(`유효하지 않은 줄이 있습니다: ${result.label}`);
+            return;
+          }
+        }
+
+        if (this.ruleOptions.initial30 && !this.currentPlayer.opened) {
+          const openingGroups = groups.slice(this.baseTableCount);
+          if (openingGroups.length === 0) {
+            ui.toast("30점 등록 전에는 자기 손패로 새 줄을 만들어야 해요.");
+            return;
+          }
+          const openingScore = calculateInitialOpenScore(openingGroups);
+          if (!isInitialOpenSatisfied(openingGroups)) {
+            ui.toast(`초기 등록은 30점 이상이어야 합니다. 현재 ${openingScore}점`);
+            return;
+          }
+          this.currentPlayer.opened = true;
+          this.addLog(this.currentPlayer, `30 등록 완료 (${openingScore}점)`);
+        } else {
+          this.addLog(this.currentPlayer, `줄 배치 완료 · 손패 ${this.currentPlayer.rack.length}장`);
+        }
+
+        this.table = deepCopy(groups);
+
+        if (this.currentPlayer.rack.length === 0) {
+          this.win(this.currentPlayer);
+          return;
+        }
+
+        this.passTurn();
+      }
+
+      passTurn() {
+        if (this.gameOver) return;
+        this.turn = (this.turn + 1) % this.players.length;
+        this.beginTurn();
+        ui.updateAll();
+        this.openTurn();
+      }
+
+      performAiTurn() {
+        if (this.gameOver || !this.currentPlayer || this.currentPlayer.type !== "AI") return;
+
+        const move = RummyAI.chooseMove(this.buildGameStateForAI(), this.currentPlayer.aiLevel);
+        if (!move) {
+          if (this.bag.length > 0) {
+            this.currentPlayer.rack.push(this.bag.pop());
+            this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 1장 뽑음`);
+            ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}가 1장을 뽑았습니다.`);
+          } else {
+            this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 패스`);
+            ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}는 낼 조합이 없어요.`);
+          }
+          ui.updateAll();
+          setTimeout(() => this.passTurn(), 650);
+          return;
+        }
+
+        const wasOpened = this.currentPlayer.opened;
+        this.currentPlayer.rack = deepCopy(move.rack);
+        this.workingTable = normalizeTableGroups(deepCopy(move.table));
+        this.table = deepCopy(this.workingTable);
+        this.currentPlayer.opened = move.opened;
+
+        if (!wasOpened && move.opened) {
+          const openingScore = calculateInitialOpenScore(this.workingTable.slice(this.baseTableCount));
+          this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 30 등록 완료 (${openingScore}점)`);
+        } else {
+          this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · ${move.summary}`);
+        }
+        ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}가 ${move.summary} 플레이를 했어요.`);
+
+        ui.updateAll();
+
+        if (this.currentPlayer.rack.length === 0) {
+          this.win(this.currentPlayer);
+          return;
+        }
+
+        setTimeout(() => this.passTurn(), 700);
+      }
+
+      requestHint() {
+        if (this.gameOver || !this.currentPlayer || this.currentPlayer.type !== "HUMAN") return;
+        if (this.drewTileThisTurn) {
+          ui.toast("1장을 뽑은 뒤에는 힌트 대신 턴 종료만 할 수 있어요.");
+          return;
+        }
+
+        const hint = RummyHintEngine.getHint(this.buildGameStateForAI());
+        this.lastHint = hint;
+        ui.showHint(hint);
+        ui.updateAll();
+        ui.toast(hint.moveType === "draw" ? "이번 턴 추천은 드로우입니다." : "추천 타일과 줄을 강조했어요.");
+      }
+
+      win(player) {
+        this.gameOver = true;
+        clearTimeout(this.aiTimer);
+        document.getElementById("win-emoji").innerText = player.icon;
+        document.getElementById("win-title").innerText = `${player.name} 승리!`;
+        document.getElementById("win-text").innerText = `${player.icon} ${player.name}가 손패를 모두 비웠습니다.`;
+        document.getElementById("modal").classList.add("show");
+        ui.updateAll();
+      }
+
+      restart() {
+        document.getElementById("modal").classList.remove("show");
+        this.startFromSetup();
+      }
+
+      toMenu() {
+        clearTimeout(this.aiTimer);
+        document.getElementById("modal").classList.remove("show");
+        ui.showScreen("start-screen");
+        ui.hideSetup();
+        ui.renderSetup();
+        ui.renderRuleOptions();
+      }
+    }
+
+    const ui = {
+      showScreen(id) {
+        document.querySelectorAll(".screen").forEach(screen => screen.classList.add("hidden"));
+        document.getElementById(id).classList.remove("hidden");
+      },
+
+      showSetup() {
+        document.getElementById("menu-main").style.display = "none";
+        document.getElementById("menu-setup").style.display = "flex";
+        this.renderSetup();
+        this.renderRuleOptions();
+      },
+
+      hideSetup() {
+        document.getElementById("menu-setup").style.display = "none";
+        document.getElementById("menu-main").style.display = "flex";
+      },
+
+      renderSetup() {
+        const container = document.getElementById("setup-container");
+        container.innerHTML = "";
+        const compactLabel = window.innerWidth < 620;
+        PLAYER_PRESETS.forEach((preset, idx) => {
+          const row = document.createElement("div");
+          row.className = "setup-row";
+          const state = game.setupState[idx];
+          const animal = ANIMAL_OPTIONS[game.playerAnimalIndices[idx]] || ANIMAL_OPTIONS[0];
+          const btnClass = state === "HUMAN" ? "state-human" : state === "OFF" ? "state-off" : "state-ai";
+          row.innerHTML = `
+            <div class="setup-player">
+              <div class="setup-icon">${animal.icon}</div>
+              <div>
+                <div style="font-size:1rem;">${animal.name}</div>
+                <div style="font-size:0.82rem; color:#7a6e63;">P${idx + 1}</div>
+              </div>
+            </div>
+            <div class="setup-actions">
+              <button class="state-btn animal-btn">${animal.icon} 동물 변경</button>
+              <button class="state-btn ${btnClass}">${getSetupStateLabel(state, compactLabel)}</button>
+            </div>
+          `;
+          const buttons = row.querySelectorAll("button");
+          buttons[0].onclick = () => game.cyclePlayerAnimal(idx);
+          buttons[1].onclick = () => game.cycleSetupState(idx);
+          container.appendChild(row);
+        });
+      },
+
+      renderRuleOptions() {
+        const renderTo = (containerId) => {
+          const container = document.getElementById(containerId);
+          if (!container) return;
+          container.innerHTML = "";
+
+          const options = [
+            {
+              key: "jokers",
+              icon: "🃏",
+              name: "조커 2장 사용",
+              desc: "가방에 조커 2장을 추가합니다.",
+              value: game.ruleOptions.jokers
+            },
+            {
+              key: "initial30",
+              icon: "3️⃣0️⃣",
+              name: "초기 30점 등록",
+              desc: "첫 성공 턴에 자기 손패만으로 30점 이상을 내려야 합니다.",
+              value: game.ruleOptions.initial30
+            }
+          ];
+
+          options.forEach(option => {
+            const row = document.createElement("div");
+            row.className = "setup-row";
+            row.innerHTML = `
+              <div class="setup-player">
+                <div class="setup-icon">${option.icon}</div>
+                <div>
+                  <div style="font-size:1rem;">${option.name}</div>
+                  <div style="font-size:0.82rem; color:#7a6e63;">${option.desc}</div>
+                </div>
+              </div>
+              <button class="state-btn ${option.value ? "state-on" : "state-off-option"}">${option.value ? "ON" : "OFF"}</button>
+            `;
+            row.querySelector("button").onclick = () => game.toggleRuleOption(option.key);
+            container.appendChild(row);
+          });
+        };
+
+        renderTo("rule-options-main");
+        renderTo("rule-options-setup");
+      },
+
+      tileHtml(tile, small = false, selected = false, drawn = false, extraClasses = "") {
+        const isJoker = !!tile.joker;
+        const colorClass = isJoker ? "joker" : tile.color;
+        const numText = isJoker ? "J" : tile.number;
+        const icon = isJoker ? "🃏" : (COLORS.find(color => color.key === tile.color)?.icon || "");
+        return `
+          <div class="tile ${colorClass} ${small ? "small" : ""} ${selected ? "selected" : ""} ${drawn ? "drawn" : ""} ${extraClasses}">
+            <div class="tile-num">${numText}</div>
+            <div class="tile-icon">${icon}</div>
+          </div>
+        `;
+      },
+
+      renderPlayers() {
+        const list = document.getElementById("player-list");
+        list.innerHTML = "";
+        game.players.forEach((player, idx) => {
+          const card = document.createElement("div");
+          card.className = `player-card ${idx === game.turn ? "active" : ""}`;
+          const badgeText = player.type === "HUMAN" ? "HUMAN" : getSetupStateLabel(`AI-${player.aiLevel}`, window.innerWidth < 620);
+          const lastLog = player.logs[0] || "아직 행동 기록 없음";
+          const openText = game.ruleOptions.initial30
+            ? (player.opened ? "30 등록 완료" : "30 등록 전")
+            : "기본 룰";
+
+          card.innerHTML = `
+            <div class="p-top">
+              <div class="p-left">
+                <div class="p-icon">${player.icon}</div>
+                <div>
+                  <div class="p-name">${player.name}</div>
+                  <div class="p-sub">P${player.slot + 1}</div>
+                </div>
+              </div>
+              <div class="p-badge">${badgeText}</div>
+            </div>
+            <div class="p-stats">
+              <div class="mini-chip">손패 ${player.rack.length}장</div>
+              <div class="mini-chip">${idx === game.turn ? "현재 턴" : "현재 대기"}</div>
+              <div class="mini-chip">${openText}</div>
+            </div>
+            <div class="mini-log">${lastLog}</div>
+          `;
+          card.style.borderLeftColor = idx === game.turn ? "var(--accent)" : player.accent;
+          list.appendChild(card);
+        });
+      },
+
+      renderTable() {
+        const tableArea = document.getElementById("table-area");
+        tableArea.innerHTML = "";
+
+        if (game.workingTable.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "empty-table";
+          empty.innerHTML = "중앙 테이블이 비어 있어요.<br />손패나 테이블 타일을 선택한 뒤 <strong>새 줄</strong> / <strong>줄에 추가</strong>로 조합을 만들 수 있어요.";
+          tableArea.appendChild(empty);
+          return;
+        }
+
+        game.workingTable.forEach((group, index) => {
+          const result = RummyRules.analyzeGroup(group);
+          const badgeClass = result.valid ? "badge-ok" : result.ready ? "badge-bad" : "badge-warn";
+          const stateClass = result.valid ? "valid" : result.ready ? "invalid" : "";
+          const hintTarget = game.lastHint?.targetGroupIndices?.includes(index) ? "hint-target" : "";
+          const card = document.createElement("div");
+          card.className = `group-card ${stateClass} ${game.selectedGroupIndex === index ? "selected" : ""} ${hintTarget}`;
+          card.onclick = () => game.selectGroup(index);
+
+          const meta = document.createElement("div");
+          meta.className = "group-meta";
+          meta.innerHTML = `<strong>줄 ${index + 1}</strong><span class="group-badge ${badgeClass}">${result.label}</span>`;
+
+          const row = document.createElement("div");
+          row.className = "tile-row";
+          group.forEach(tile => {
+            const wrapper = document.createElement("div");
+            const hintClass = game.lastHint?.tableTileIds?.includes(tile.id) ? "hint-source" : "";
+            wrapper.innerHTML = this.tileHtml(tile, true, game.selectedTableIds.has(tile.id), false, hintClass);
+            const tileEl = wrapper.firstElementChild;
+            tileEl.onclick = (event) => {
+              event.stopPropagation();
+              game.toggleTableTile(tile.id, index);
+            };
+            row.appendChild(tileEl);
+          });
+
+          card.appendChild(meta);
+          card.appendChild(row);
+          tableArea.appendChild(card);
+        });
+      },
+
+      renderRack() {
+        const rackRow = document.getElementById("rack-row");
+        rackRow.innerHTML = "";
+        if (!game.currentPlayer) return;
+
+        game.currentPlayer.rack.forEach(tile => {
+          const wrapper = document.createElement("div");
+          const hintClass = game.lastHint?.rackTileIds?.includes(tile.id) ? "hint" : "";
+          wrapper.innerHTML = this.tileHtml(tile, false, game.selectedRackIds.has(tile.id), game.drawnTileId === tile.id, hintClass);
+          const tileEl = wrapper.firstElementChild;
+          tileEl.onclick = () => game.toggleRackTile(tile.id);
+          rackRow.appendChild(tileEl);
+        });
+
+        if (game.currentPlayer.rack.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "chip";
+          empty.innerText = "손패가 비었습니다!";
+          rackRow.appendChild(empty);
+        }
+      },
+
+      setInfo(title, text, allowHtml = false) {
+        document.getElementById("info-title").innerText = title;
+        document.getElementById("info-text")[allowHtml ? "innerHTML" : "innerText"] = text;
+      },
+
+      showHint(hint) {
+        const parts = [
+          `<div class="hint-summary">${hint.leadText}</div>`,
+          `<div class="hint-reason">${hint.reason}</div>`
+        ];
+        if (hint.openingBreakdown && hint.openingBreakdown.length > 0) {
+          parts.push(`<div class="hint-reason">${hint.openingBreakdown.join("<br>")}</div>`);
+        }
+        if (hint.futureBenefit) {
+          parts.push(`<div class="hint-reason">${hint.futureBenefit}</div>`);
+        }
+        hint.steps.forEach((step, index) => {
+          parts.push(`<div class="hint-step">${index + 1}. ${step}</div>`);
+        });
+        this.setInfo(hint.title, parts.join(""), true);
+      },
+
+      updateButtons() {
+        const ids = [
+          "btn-sort-color",
+          "btn-sort-number",
+          "btn-new-group",
+          "btn-append-group",
+          "btn-clear-select",
+          "btn-undo-action",
+          "btn-request-hint",
+          "btn-draw-tile",
+          "btn-end-turn"
+        ];
+
+        ids.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = false;
+        });
+
+        if (!game.currentPlayer || game.gameOver || game.currentPlayer.type !== "HUMAN") {
+          ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+          });
+          return;
+        }
+
+        const hasSelection = game.getTotalSelectedCount() > 0;
+        const hasGroup = game.selectedGroupIndex !== null;
+        const hasAction = game.actionHistory.length > 0;
+
+        if (game.drewTileThisTurn) {
+          [
+            "btn-sort-color",
+            "btn-sort-number",
+            "btn-new-group",
+            "btn-append-group",
+            "btn-clear-select",
+            "btn-undo-action",
+            "btn-request-hint",
+            "btn-draw-tile"
+          ].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+          });
+          document.getElementById("btn-end-turn").disabled = false;
+          return;
+        }
+
+        document.getElementById("btn-new-group").disabled = !hasSelection;
+        document.getElementById("btn-append-group").disabled = !(hasSelection && hasGroup);
+        document.getElementById("btn-clear-select").disabled = !(hasSelection || hasGroup);
+        document.getElementById("btn-undo-action").disabled = !hasAction;
+        document.getElementById("btn-request-hint").disabled = false;
+        document.getElementById("btn-draw-tile").disabled = hasAction || game.bag.length === 0;
+        document.getElementById("btn-end-turn").disabled = !hasAction;
+      },
+
+      updateAll() {
+        if (!game.currentPlayer) return;
+
+        document.getElementById("bag-count").innerText = game.bag.length;
+        document.getElementById("turn-label").innerText = `${game.currentPlayer.icon} ${game.currentPlayer.name}`;
+        document.getElementById("rack-owner").innerText = game.currentPlayer.name;
+        document.getElementById("selected-count").innerText = game.getTotalSelectedCount();
+        document.getElementById("selection-label").innerText = game.getTotalSelectedCount() > 0
+          ? `${game.getTotalSelectedCount()}장 선택 중`
+          : "선택 없음";
+        document.getElementById("group-label").innerText = game.selectedGroupIndex !== null
+          ? `줄 ${game.selectedGroupIndex + 1}`
+          : "선택 줄 없음";
+        document.getElementById("rule-joker-chip").innerText = game.ruleOptions.jokers ? "조커 ON" : "조커 OFF";
+        document.getElementById("rule-open-chip").innerText = game.ruleOptions.initial30 ? "30룰 ON" : "30룰 OFF";
+
+        this.renderPlayers();
+        this.renderTable();
+        this.renderRack();
+        this.updateButtons();
+      },
+
+      toast(message) {
+        const el = document.getElementById("toast");
+        el.innerText = message;
+        el.classList.add("show");
+        clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => el.classList.remove("show"), 1500);
+      }
+    };
+
+    const game = new Game();
+    ui.renderSetup();
+    ui.renderRuleOptions();
+  </script>
+</body>
+</html>
