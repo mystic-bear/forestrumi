@@ -3191,11 +3191,11 @@
             jokerRelocation: 44,
             jokerEfficiency: 22,
             jokerTrap: 14,
-            racePressure: 40,
-            emergencyPressure: 80,
-            alertPressure: 15,
-            finishBonus: 600,
-            closingBonus: 10,
+            racePressure: 60,
+            emergencyPressure: 120,
+            alertPressure: 25,
+            finishBonus: 850,
+            closingBonus: 18,
             winBonus: 2000,
             futureRackReduction: 18,
             futureAppendDensity: 3,
@@ -3205,6 +3205,30 @@
             drawFutility: 20
           }
         });
+      }
+
+      chooseMove(gameState) {
+        const opponentRacks = gameState.playersMeta
+          .filter((_, index) => index !== gameState.turnIndex)
+          .map(player => player.rackCount);
+        const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
+        const shouldBoostEndgame = gameState.currentPlayer.rack.length <= 7 || smallestOpponentRack <= 4;
+        if (!shouldBoostEndgame) return super.chooseMove(gameState);
+
+        const previousConfig = this.config;
+        this.config = {
+          ...previousConfig,
+          exactQuota: Math.max(previousConfig.exactQuota || 0, 6),
+          maxRearrangeBranches: Math.max(previousConfig.maxRearrangeBranches || 0, 28),
+          timeLimitMs: Math.max(previousConfig.timeLimitMs || 0, 750),
+          maxPoolTiles: Math.max(previousConfig.maxPoolTiles || 0, 13)
+        };
+
+        try {
+          return super.chooseMove(gameState);
+        } finally {
+          this.config = previousConfig;
+        }
       }
 
       computeFuturePotential(state, ctx) {
@@ -3337,6 +3361,31 @@
     class RummyAI {
       static chooseMove(gameState, level) {
         const targetLevel = Math.max(1, Math.min(6, Number(level) || 1));
+        if (targetLevel < 6) {
+          return this.chooseLegacy(gameState, targetLevel);
+        }
+
+        const floorMove = this.chooseLegacy(gameState, 5);
+        const expertMove = this.getStrategy(6).chooseMove(gameState);
+        if (expertMove) {
+          expertMove.engineLevel = 6;
+          expertMove.selectedLevel = targetLevel;
+        }
+
+        let chosen = null;
+        if (!expertMove) {
+          chosen = floorMove;
+        } else if (!floorMove) {
+          chosen = expertMove;
+        } else {
+          chosen = this.passesLevel6Floor(expertMove, floorMove, gameState) ? expertMove : floorMove;
+        }
+
+        if (chosen) chosen.selectedLevel = targetLevel;
+        return chosen;
+      }
+
+      static chooseLegacy(gameState, targetLevel) {
         let bestMove = null;
         let bestLevel = 0;
 
@@ -3354,8 +3403,10 @@
           }
         }
 
-        if (bestMove) bestMove.selectedLevel = targetLevel;
-        if (bestMove) bestMove.engineLevel = bestLevel;
+        if (bestMove) {
+          bestMove.selectedLevel = targetLevel;
+          bestMove.engineLevel = bestLevel;
+        }
         return bestMove;
       }
 
@@ -3405,6 +3456,38 @@
 
       static isBetterMove(candidate, current, gameState) {
         return this.compareMovePriority(candidate, current, gameState) > 0;
+      }
+
+      static passesLevel6Floor(expert, floor, gameState) {
+        if (!expert) return false;
+        if (!floor) return true;
+
+        const openingRequired = gameState.ruleOptions.initial30 && !gameState.currentPlayer.opened;
+        const expertOpeningReady = (expert.openingScore || 0) >= 30;
+        const floorOpeningReady = (floor.openingScore || 0) >= 30;
+        if (openingRequired && !expertOpeningReady && floorOpeningReady) return false;
+
+        const opponentRacks = gameState.playersMeta
+          .filter((_, index) => index !== gameState.turnIndex)
+          .map(player => player.rackCount);
+        const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
+
+        const stability = (move) =>
+          (move.stableGroups || 0) -
+          (move.fragileGroups || 0) -
+          ((move.stats?.touchedGroups || 0) * 0.25);
+
+        const rackGap = (expert.rackReduction || 0) - (floor.rackReduction || 0);
+        const stabilityGap = stability(expert) - stability(floor);
+        const touchGap = (expert.stats?.touchedGroups || 0) - (floor.stats?.touchedGroups || 0);
+        const mobilityGap = (expert.futureMobility || 0) - (floor.futureMobility || 0);
+
+        if (smallestOpponentRack <= 3 && rackGap < 0) return false;
+        if (rackGap <= -2) return false;
+        if (stabilityGap < -2) return false;
+        if (touchGap > 2 && mobilityGap <= 0) return false;
+
+        return true;
       }
     }
 
