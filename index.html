@@ -1587,7 +1587,9 @@
           rack: deepCopy(gameState.currentPlayer.rack),
           table: normalizeTableGroups(deepCopy(gameState.table)),
           opened: gameState.currentPlayer.opened,
-          baseTableCount: gameState.baseTableCount ?? gameState.table.length,
+          baseTableCount: typeof gameState.baseTableCount === "number"
+            ? gameState.baseTableCount
+            : gameState.table.length,
           actions: [],
           stats: {
             actionScore: 0,
@@ -2002,7 +2004,18 @@
       }
 
       canFinishTurn(state, ctx) {
-        if (state.rack.length === ctx.initialRackSize) return false;
+        const reducedDuringSearch = state.rack.length < ctx.initialRackSize;
+        const reducedEarlierThisTurn = !!(
+          ctx.gameState.hintMode
+          && (
+            ctx.gameState.alreadyReducedRackThisTurn
+            || (
+              Number.isInteger(ctx.gameState.turnStartRackSize)
+              && ctx.gameState.turnStartRackSize > ctx.initialRackSize
+            )
+          )
+        );
+        if (!reducedDuringSearch && !reducedEarlierThisTurn) return false;
         if (state.table.some(group => !RummyRules.analyzeGroup(group).valid)) return false;
 
         const { ruleOptions, currentPlayer } = ctx.gameState;
@@ -3191,11 +3204,11 @@
             jokerRelocation: 44,
             jokerEfficiency: 22,
             jokerTrap: 14,
-            racePressure: 60,
-            emergencyPressure: 120,
-            alertPressure: 25,
-            finishBonus: 850,
-            closingBonus: 18,
+            racePressure: 90,
+            emergencyPressure: 150,
+            alertPressure: 30,
+            finishBonus: 950,
+            closingBonus: 24,
             winBonus: 2000,
             futureRackReduction: 18,
             futureAppendDensity: 3,
@@ -3208,20 +3221,22 @@
       }
 
       chooseMove(gameState) {
+        const rackCount = gameState.currentPlayer.rack.length;
         const opponentRacks = gameState.playersMeta
           .filter((_, index) => index !== gameState.turnIndex)
           .map(player => player.rackCount);
         const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
-        const shouldBoostEndgame = gameState.currentPlayer.rack.length <= 7 || smallestOpponentRack <= 4;
+        const shouldBoostEndgame = rackCount <= 7 || smallestOpponentRack <= 4;
         if (!shouldBoostEndgame) return super.chooseMove(gameState);
+        const shouldUseEmergencyBoost = rackCount <= 4 || smallestOpponentRack <= 2;
 
         const previousConfig = this.config;
         this.config = {
           ...previousConfig,
-          exactQuota: Math.max(previousConfig.exactQuota || 0, 6),
-          maxRearrangeBranches: Math.max(previousConfig.maxRearrangeBranches || 0, 28),
-          timeLimitMs: Math.max(previousConfig.timeLimitMs || 0, 750),
-          maxPoolTiles: Math.max(previousConfig.maxPoolTiles || 0, 13)
+          exactQuota: Math.max(previousConfig.exactQuota || 0, shouldUseEmergencyBoost ? 8 : 7),
+          maxRearrangeBranches: Math.max(previousConfig.maxRearrangeBranches || 0, shouldUseEmergencyBoost ? 32 : 30),
+          timeLimitMs: Math.max(previousConfig.timeLimitMs || 0, shouldUseEmergencyBoost ? 900 : 850),
+          maxPoolTiles: Math.max(previousConfig.maxPoolTiles || 0, 14)
         };
 
         try {
@@ -3318,6 +3333,39 @@
         return result;
       }
 
+      computeGiveawayRisk(table) {
+        let endpointRisk = 0;
+        let risk = 0;
+
+        table.forEach(group => {
+          const info = RummyRules.explainGroup(group);
+          if (!info.valid) return;
+
+          const hasJoker = group.some(tile => tile.joker);
+          const len = group.length;
+
+          if ((info.kind === "run" || info.kind === "wild") && info.canonicalNumbers.length === len) {
+            const first = info.canonicalNumbers[0];
+            const last = info.canonicalNumbers[info.canonicalNumbers.length - 1];
+            endpointRisk += (first > 1 ? 1 : 0) + (last < 13 ? 1 : 0);
+          }
+
+          if (len === 3) {
+            risk += 1;
+          }
+
+          if (info.kind === "set" && len === 3 && !hasJoker) {
+            risk += 1;
+          }
+
+          if (hasJoker) {
+            risk += len === 3 ? 2 : 1;
+          }
+        });
+
+        return risk + Math.min(endpointRisk, 6);
+      }
+
       evaluateState(state, ctx, terminal) {
         let score = super.evaluateState(state, ctx, terminal);
         const w = this.config.weights;
@@ -3352,6 +3400,23 @@
           score += draw.drawWeightedScore * (w.drawWeightedNearComplete || 0);
           score += draw.scarcityBonus * (w.tileScarcity || 0);
           score -= draw.futileWaits * (w.drawFutility || 0);
+
+          if (smallestOpponentRack <= 4 && rackReduction === 0) {
+            score -= 90;
+          }
+          if (smallestOpponentRack <= 3 && rackReduction === 1) {
+            score -= 35;
+          }
+
+          const baseGiveawayRisk = ctx.baseGiveawayRisk ?? (ctx.baseGiveawayRisk = this.computeGiveawayRisk(ctx.gameState.table));
+          const giveawayDelta = Math.max(0, this.computeGiveawayRisk(state.table) - baseGiveawayRisk);
+          if (giveawayDelta > 0) {
+            if (smallestOpponentRack <= 6) {
+              score -= giveawayDelta * 14;
+            } else if (ctx.gameState.bagCount <= 14) {
+              score -= giveawayDelta * 8;
+            }
+          }
         }
 
         return score;
@@ -3661,14 +3726,9 @@
         const nextRackJokers = (bestMove.rack || []).filter(tile => tile.joker).length;
         const usesRackJoker = nextRackJokers < currentRackJokers;
         const touchedGroups = bestMove.stats?.touchedGroups || 0;
-        const structuralCost = futureLoss >= 2 || nearLoss >= 2 || usesRackJoker || touchedGroups >= 2;
-        const playAbandonPenalty =
-          ((bestMove.rackReduction || 0) * 28) +
-          ((bestMove.futureMobility || 0) * 5) +
-          (Math.max(0, (bestMove.stableGroups || 0) - (bestMove.fragileGroups || 0)) * 6);
 
         const chooseIfStrongEnough = (reasonCode, score, meta) =>
-          score >= 80 ? this.makeStrategicDrawMove(reasonCode, score, level, {
+          score >= 45 ? this.makeStrategicDrawMove(reasonCode, score, level, {
             ...meta,
             opponentMinRack: smallestOpponentRack,
             bagCount: gameState.bagCount,
@@ -3682,16 +3742,15 @@
 
         if (!gameState.currentPlayer.opened && (bestMove.openingScore || 0) >= 30) {
           const weakOpening = (bestMove.openingScore || 0) <= 33 && (bestMove.rackReduction || 0) <= 2;
-          const costlyOpening = structuralCost;
+          const costlyOpening = usesRackJoker || futureLoss >= 2 || nearLoss >= 2 || touchedGroups >= 2;
           const safeToWait = smallestOpponentRack >= 7 && gameState.bagCount >= 10;
           if (weakOpening && costlyOpening && safeToWait) {
-            const score = 20
-              + futureLoss * 12
-              + nearLoss * 8
+            const score = 25
+              + futureLoss * 15
+              + nearLoss * 10
               + (usesRackJoker ? 30 : 0)
-              + (touchedGroups >= 2 ? 18 : 0)
-              + (level >= 6 ? beforeDraw.hitRate * 120 : beforeDraw.nearCompleteCount * 4)
-              - playAbandonPenalty;
+              + (touchedGroups >= 2 ? 20 : 0)
+              + (level >= 6 ? beforeDraw.hitRate * 180 : beforeDraw.nearCompleteCount * 6);
             const move = chooseIfStrongEnough("hold-opening", score, {
               openingScore: bestMove.openingScore || 0,
               usesRackJoker,
@@ -3701,17 +3760,26 @@
           }
         }
 
-        if ((bestMove.rackReduction || 0) === 1 && structuralCost && gameState.bagCount >= 8 && smallestOpponentRack >= 6) {
-          const score = 18
-            + futureLoss * 18
-            + nearLoss * 12
-            + appendLoss * 4
+        if ((bestMove.rackReduction || 0) <= 1 && gameState.bagCount >= 8 && smallestOpponentRack >= 6) {
+          const score = 10
+            + futureLoss * 15
+            + nearLoss * 10
+            + appendLoss * 3
             + (usesRackJoker ? 25 : 0)
-            + Math.max(0, touchedGroups - 1) * 10
-            - playAbandonPenalty;
+            + Math.max(0, touchedGroups - 1) * 8;
           const move = chooseIfStrongEnough("preserve-shape", score, {
             usesRackJoker,
             touchedGroups
+          });
+          if (move) return move;
+        }
+
+        if ((bestMove.rackReduction || 0) <= 1 && gameState.bagCount >= 8 && smallestOpponentRack >= 6) {
+          const score = level >= 6
+            ? beforeDraw.hitRate * 180 + beforeDraw.usefulRemaining * 8 + beforeFuture.futureRackReduction * 6 - beforeDraw.deadKeys * 6
+            : beforeDraw.nearCompleteCount * 8 + beforeFuture.futureRackReduction * 10 + beforeFuture.futureAppendDensity * 2;
+          const move = chooseIfStrongEnough("fish-completion", score, {
+            deadKeys: beforeDraw.deadKeys
           });
           if (move) return move;
         }
@@ -3916,6 +3984,255 @@
       }
     }
 
+    // Ver 8 overrides legacy strategic draw behavior without touching the older engine internals.
+    RummyAI.makeStrategicDrawMove = function(reasonCode, score, level, meta = {}) {
+      return {
+        type: "draw",
+        summary: "전략 드로우",
+        score,
+        drawScore: score,
+        openingScore: 0,
+        rackReduction: 0,
+        futureMobility: 0,
+        stableGroups: 0,
+        fragileGroups: 0,
+        stats: {
+          actionScore: 0,
+          newGroupCount: 0,
+          appendCount: 0,
+          rearrangeCount: 0,
+          touchedGroups: 0,
+          jokerRelocationCount: 0,
+          jokerEfficiency: 0,
+          jokerTrap: 0
+        },
+        actions: [],
+        drawReasonCode: reasonCode,
+        drawMeta: meta,
+        engineLevel: level
+      };
+    };
+
+    RummyAI.countAppendableRackTilesForDrawState = function(state) {
+      const appendable = new Set();
+      state.rack.forEach(tile => {
+        for (const group of state.table) {
+          if (RummyRules.analyzeGroup([...group, tile]).valid) {
+            appendable.add(tile.id);
+            break;
+          }
+        }
+      });
+      return appendable.size;
+    };
+
+    RummyAI.countFragileGroupsForDrawState = function(state) {
+      return state.table.filter(group => group.length === 3 && RummyRules.analyzeGroup(group).valid).length;
+    };
+
+    RummyAI.isCleanStrategicDrawBan = function(move, metrics) {
+      if ((move.rackReduction || 0) >= 2) return true;
+
+      const safeAppend = move.type === "append" && (move.stats?.rearrangeCount || 0) === 0;
+      const appendLike = safeAppend || (
+        move.type !== "rearrange"
+        && (move.stats?.rearrangeCount || 0) === 0
+        && metrics.touchedGroups <= 1
+      );
+
+      return appendLike
+        && !metrics.usesRackJoker
+        && metrics.touchedGroups <= 1
+        && metrics.fragileIncrease <= 0;
+    };
+
+    RummyAI.chooseStrategicDraw = function(gameState, bestMove, level) {
+      if (level < 5) return null;
+      if (!bestMove || bestMove.type === "draw") return null;
+
+      const currentRackCount = gameState.currentPlayer.rack.length;
+      if ((bestMove.rack || []).length === 0 || (bestMove.rackReduction || 0) >= currentRackCount) return null;
+      if ((bestMove.rackReduction || 0) >= 2) return null;
+      if (gameState.bagCount <= 6) return null;
+      if (currentRackCount <= 5) return null;
+
+      const opponentRacks = gameState.playersMeta
+        .filter((_, index) => index !== gameState.turnIndex)
+        .map(player => player.rackCount);
+      const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
+      if (smallestOpponentRack <= 5) return null;
+
+      const currentStrategicDraws = gameState.consecutiveStrategicDrawsByPlayer?.[gameState.turnIndex] || 0;
+      const strategicDrawLimit = level >= 6 ? 2 : 1;
+      if (currentStrategicDraws >= strategicDrawLimit) return null;
+
+      const beforeState = this.buildStrategicState(gameState);
+      const afterState = this.buildStrategicState(gameState, bestMove);
+      const beforeFuture = this.computeFuturePotentialForDraw(beforeState);
+      const afterFuture = this.computeFuturePotentialForDraw(afterState);
+      const beforeDraw = this.computeDrawAwarenessForDecision(beforeState, gameState);
+      const afterDraw = this.computeDrawAwarenessForDecision(afterState, gameState);
+      const futureLoss = Math.max(0, beforeFuture.futureRackReduction - afterFuture.futureRackReduction);
+      const appendLoss = Math.max(0, beforeFuture.futureAppendDensity - afterFuture.futureAppendDensity);
+      const nearLoss = Math.max(0, beforeDraw.nearCompleteCount - afterDraw.nearCompleteCount);
+      const currentRackJokers = gameState.currentPlayer.rack.filter(tile => tile.joker).length;
+      const nextRackJokers = (bestMove.rack || []).filter(tile => tile.joker).length;
+      const usesRackJoker = nextRackJokers < currentRackJokers;
+      const touchedGroups = bestMove.stats?.touchedGroups || 0;
+      const beforeFragileGroups = this.countFragileGroupsForDrawState(beforeState);
+      const afterFragileGroups = this.countFragileGroupsForDrawState(afterState);
+      const fragileIncrease = Math.max(0, afterFragileGroups - beforeFragileGroups);
+      const beforeFutureMobility = this.countAppendableRackTilesForDrawState(beforeState);
+      const futureMobilityLoss = Math.max(0, beforeFutureMobility - (bestMove.futureMobility || 0));
+
+      const metrics = {
+        futureLoss,
+        appendLoss,
+        nearLoss,
+        usesRackJoker,
+        touchedGroups,
+        fragileIncrease,
+        futureMobilityLoss
+      };
+      if (this.isCleanStrategicDrawBan(bestMove, metrics)) return null;
+
+      if ((bestMove.rackReduction || 0) !== 1) return null;
+      if (gameState.bagCount < 8) return null;
+      if (smallestOpponentRack < 6) return null;
+      if (currentRackCount < 6) return null;
+
+      const drawOpportunityBonus = level >= 6
+        ? Math.round((beforeDraw.hitRate || 0) * 20)
+        : Math.min(12, (beforeDraw.usefulKeysCount || 0) * 2);
+      const urgencyPenalty = Math.max(0, 8 - smallestOpponentRack) * 12
+        + Math.max(0, 12 - gameState.bagCount) * 6
+        + Math.max(0, 7 - currentRackCount) * 4;
+      const threshold = 80;
+      const baseMeta = {
+        openingScore: bestMove.openingScore || 0,
+        usesRackJoker,
+        touchedGroups,
+        futureLoss,
+        nearLoss,
+        appendLoss,
+        opponentMinRack: smallestOpponentRack,
+        bagCount: gameState.bagCount,
+        fragileIncrease,
+        futureMobilityLoss
+      };
+      const chooseIfStrongEnough = (reasonCode, structuralCost, playAbandonPenalty, meta = {}) => {
+        const drawScore = Math.round(structuralCost + drawOpportunityBonus - playAbandonPenalty - urgencyPenalty);
+        if (drawScore < threshold) return null;
+        return this.makeStrategicDrawMove(reasonCode, drawScore, level, {
+          ...baseMeta,
+          ...meta
+        });
+      };
+
+      if (!gameState.currentPlayer.opened) {
+        const openingHoldUsed = gameState.openingHoldDrawUsed?.[gameState.turnIndex] || 0;
+        const openingScore = bestMove.openingScore || 0;
+        const holdSignals = [
+          usesRackJoker,
+          futureLoss >= 2,
+          nearLoss >= 1,
+          touchedGroups >= 2,
+          fragileIncrease > 0
+        ].filter(Boolean).length;
+        if (
+          openingHoldUsed < 1
+          && openingScore >= 30
+          && openingScore <= 33
+          && (bestMove.rackReduction || 0) <= 2
+          && gameState.bagCount >= 10
+          && smallestOpponentRack >= 7
+          && holdSignals >= 1
+        ) {
+          const structuralCost = (34 - openingScore) * 12
+            + (usesRackJoker ? 28 : 0)
+            + futureLoss * 20
+            + nearLoss * 18
+            + appendLoss * 8
+            + Math.max(0, touchedGroups - 1) * 10
+            + fragileIncrease * 24
+            + futureMobilityLoss * 12
+            + 20;
+          const playAbandonPenalty = 26
+            + Math.max(0, bestMove.futureMobility || 0) * 2
+            + Math.max(0, bestMove.stableGroups || 0) * 4
+            + Math.max(0, openingScore - 30) * 4;
+          const move = chooseIfStrongEnough("hold-opening", structuralCost, playAbandonPenalty);
+          if (move) return move;
+        }
+      }
+
+      const preserveSignals = [
+        usesRackJoker,
+        futureLoss >= 2,
+        nearLoss >= 1,
+        appendLoss >= 2,
+        touchedGroups >= 2,
+        fragileIncrease > 0,
+        futureMobilityLoss > 0
+      ].filter(Boolean).length;
+      if (preserveSignals >= 2) {
+        const structuralCost = (usesRackJoker ? 28 : 0)
+          + futureLoss * 20
+          + nearLoss * 18
+          + appendLoss * 10
+          + Math.max(0, touchedGroups - 1) * 10
+          + fragileIncrease * 24
+          + futureMobilityLoss * 12;
+        const playAbandonPenalty = 26
+          + Math.max(0, bestMove.futureMobility || 0) * 3
+          + Math.max(0, bestMove.stableGroups || 0) * 4
+          + ((bestMove.type === "append" && (bestMove.stats?.rearrangeCount || 0) === 0) ? 14 : 0);
+        const move = chooseIfStrongEnough("preserve-shape", structuralCost, playAbandonPenalty);
+        if (move) return move;
+      }
+
+      return null;
+    };
+
+    RummyHintEngine.buildStrategicDrawComment = function(move) {
+      const meta = move.drawMeta || {};
+      if (move.drawReasonCode === "hold-opening") {
+        return {
+          title: "AI-6 힌트",
+          summary: move.summary || "전략 드로우",
+          shortText: "등록 보류 드로우",
+          reason: "등록은 가능하지만 현재 수는 손패를 많이 줄이지 못하고 패 구조도 약하게 만듭니다. 더 강한 등록 타이밍을 노리는 편이 좋습니다.",
+          leadText: "추천: 지금은 등록을 미루고 1장을 뽑으세요.",
+          steps: ["1장 뽑기 버튼을 눌러 턴을 마무리하세요."],
+          futureBenefit: meta.bagCount >= 10 && meta.opponentMinRack >= 7
+            ? "가방과 상대 여유가 있어, 이번 턴에는 약한 등록보다 더 강한 등록 타이밍을 기다릴 만합니다."
+            : ""
+        };
+      }
+      if (move.drawReasonCode === "preserve-shape") {
+        return {
+          title: "AI-6 힌트",
+          summary: move.summary || "전략 드로우",
+          shortText: "구조 보존 드로우",
+          reason: "현재 수는 가능하지만 손패 구조를 많이 깨거나 조커를 소모합니다. 지금은 연결 형태를 보존하는 편이 더 유리합니다.",
+          leadText: "추천: 약한 1장 플레이 대신 1장을 뽑으세요.",
+          steps: ["1장 뽑기 버튼을 눌러 턴을 마무리하세요."],
+          futureBenefit: meta.futureLoss > 0 || meta.futureMobilityLoss > 0
+            ? "지금 형태를 보존하면 다음 턴에 더 자연스럽고 강한 연결 수를 만들 여지가 남습니다."
+            : ""
+        };
+      }
+      return {
+        title: "AI-6 힌트",
+        summary: move.summary || "전략 드로우",
+        shortText: "전략 드로우",
+        reason: "현재 플레이보다 드로우가 더 안정적입니다.",
+        leadText: "추천: 이번 턴은 1장을 뽑으세요.",
+        steps: ["1장 뽑기 버튼을 눌러 턴을 마무리하세요."],
+        futureBenefit: ""
+      };
+    };
+
     class Game {
       constructor() {
         this.setupState = ["HUMAN", "HUMAN", "OFF", "OFF"];
@@ -3947,6 +4264,8 @@
         this.gameOver = false;
         this.aiTimer = null;
         this.lastHint = null;
+        this.consecutiveStrategicDrawsByPlayer = [];
+        this.openingHoldDrawUsed = [];
       }
 
       get currentPlayer() {
@@ -4018,7 +4337,7 @@
         };
       }
 
-      buildGameStateForAI() {
+      buildGameStateForAI(options = {}) {
         const state = {
           currentPlayer: {
             rack: deepCopy(this.currentPlayer.rack),
@@ -4036,8 +4355,15 @@
             type: player.type,
             aiLevel: player.aiLevel
           })),
-          turnIndex: this.turn
+          turnIndex: this.turn,
+          consecutiveStrategicDrawsByPlayer: [...this.consecutiveStrategicDrawsByPlayer],
+          openingHoldDrawUsed: [...this.openingHoldDrawUsed]
         };
+        if (options.hintMode) {
+          state.hintMode = true;
+          state.turnStartRackSize = this.getTurnStartRackSize();
+          state.alreadyReducedRackThisTurn = this.hasReducedRackThisTurn();
+        }
         if (this.currentPlayer.aiLevel === 6) {
           state.tileTracker = this.buildTileTracker(this.turn);
         }
@@ -4142,6 +4468,8 @@
         }
 
         this.players = players;
+        this.consecutiveStrategicDrawsByPlayer = this.players.map(() => 0);
+        this.openingHoldDrawUsed = this.players.map(() => 0);
         this.initTileTracker();
         this.bag = this.createBag();
         this.players.forEach(player => {
@@ -4533,8 +4861,10 @@
       performAiTurn() {
         if (this.gameOver || !this.currentPlayer || this.currentPlayer.type !== "AI") return;
 
+        const playerIndex = this.turn;
         const move = RummyAI.chooseMove(this.buildGameStateForAI(), this.currentPlayer.aiLevel);
         if (!move) {
+          this.consecutiveStrategicDrawsByPlayer[playerIndex] = 0;
           if (this.bag.length > 0) {
             this.currentPlayer.rack.push(this.bag.pop());
             this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 1장 뽑음`);
@@ -4548,6 +4878,16 @@
           return;
         }
         if (move.type === "draw") {
+          this.consecutiveStrategicDrawsByPlayer[playerIndex] =
+            (this.consecutiveStrategicDrawsByPlayer[playerIndex] || 0) + 1;
+          if (!this.currentPlayer.opened && move.drawReasonCode === "hold-opening") {
+            this.openingHoldDrawUsed[playerIndex] = (this.openingHoldDrawUsed[playerIndex] || 0) + 1;
+          }
+          const drawLabel = move.drawReasonCode === "hold-opening"
+            ? "전략 드로우(등록 보류)"
+            : move.drawReasonCode === "preserve-shape"
+              ? "전략 드로우(구조 보존)"
+              : (move.summary || "전략 드로우");
           if (this.bag.length > 0) {
             this.currentPlayer.rack.push(this.bag.pop());
             this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · ${move.summary}`);
@@ -4682,6 +5022,772 @@
         ui.renderQuickStartMixedLevel();
       }
     }
+
+    // Ver 8 treats strategic draw as a separate turn-resolution path with per-player guardrails.
+    Game.prototype.performAiTurn = function() {
+      if (this.gameOver || !this.currentPlayer || this.currentPlayer.type !== "AI") return;
+
+      const playerIndex = this.turn;
+      const move = RummyAI.chooseMove(this.buildGameStateForAI(), this.currentPlayer.aiLevel);
+      if (!move) {
+        this.consecutiveStrategicDrawsByPlayer[playerIndex] = 0;
+        if (this.bag.length > 0) {
+          this.currentPlayer.rack.push(this.bag.pop());
+          this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 1장 드로우`);
+          ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}님이 1장을 뽑았습니다.`);
+        } else {
+          this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 패스`);
+          ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}님이 둘 수를 찾지 못했습니다.`);
+        }
+        ui.updateAll();
+        setTimeout(() => this.passTurn(), 650);
+        return;
+      }
+
+      if (move.type === "draw") {
+        const drawLabel = move.drawReasonCode === "hold-opening"
+          ? "전략 드로우(등록 보류)"
+          : move.drawReasonCode === "preserve-shape"
+            ? "전략 드로우(구조 보존)"
+            : (move.summary || "전략 드로우");
+
+        if (this.bag.length > 0) {
+          this.currentPlayer.rack.push(this.bag.pop());
+          this.consecutiveStrategicDrawsByPlayer[playerIndex] =
+            (this.consecutiveStrategicDrawsByPlayer[playerIndex] || 0) + 1;
+          if (!this.currentPlayer.opened && move.drawReasonCode === "hold-opening") {
+            this.openingHoldDrawUsed[playerIndex] = (this.openingHoldDrawUsed[playerIndex] || 0) + 1;
+          }
+          this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · ${drawLabel}`);
+          ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}님이 ${drawLabel}를 선택했습니다.`);
+        } else {
+          this.consecutiveStrategicDrawsByPlayer[playerIndex] = 0;
+          this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 패스`);
+          ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}님이 더 이상 뽑을 수 없습니다.`);
+        }
+        ui.updateAll();
+        setTimeout(() => this.passTurn(), 650);
+        return;
+      }
+
+      this.consecutiveStrategicDrawsByPlayer[playerIndex] = 0;
+      const wasOpened = this.currentPlayer.opened;
+      this.currentPlayer.rack = deepCopy(move.rack);
+      this.workingTable = normalizeTableGroups(deepCopy(move.table));
+      this.table = deepCopy(this.workingTable);
+      this.currentPlayer.opened = move.opened;
+
+      if (!wasOpened && move.opened) {
+        const openingScore = calculateInitialOpenScore(this.workingTable.slice(this.baseTableCount));
+        this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 30 등록 완료 (${openingScore}점)`);
+      } else {
+        this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · ${move.summary}`);
+      }
+      ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}님이 ${move.summary} 플레이를 했습니다.`);
+
+      ui.updateAll();
+
+      if (this.currentPlayer.rack.length === 0) {
+        this.win(this.currentPlayer);
+        return;
+      }
+
+      setTimeout(() => this.passTurn(), 700);
+    };
+
+    // Ver 10 tightens mid-turn hint context, softens no-move hint messaging, and adds a narrow table-donor joker substitution path.
+    AIBaseStrategy.prototype.canFinishTurn = function(state, ctx) {
+      const reducedDuringSearch = state.rack.length < ctx.initialRackSize;
+      const reducedEarlierThisTurn = !!(
+        ctx.gameState.hintMode
+        && (
+          ctx.gameState.alreadyReducedRackThisTurn
+          || (
+            Number.isInteger(ctx.gameState.turnStartRackSize)
+            && ctx.gameState.turnStartRackSize > ctx.initialRackSize
+          )
+        )
+      );
+      if (!reducedDuringSearch && !reducedEarlierThisTurn) return false;
+      if (state.table.some(group => !RummyRules.analyzeGroup(group).valid)) return false;
+
+      const { ruleOptions, currentPlayer } = ctx.gameState;
+      if (!ruleOptions.initial30 || currentPlayer.opened) return true;
+
+      const openingGroups = state.table.slice(state.baseTableCount);
+      return isInitialOpenSatisfied(openingGroups);
+    };
+
+    AIBaseStrategy.prototype.generateJokerSubstitutionMoves = function(state, ctx) {
+      const candidates = [];
+      const maxSolutions = this.config.maxPartitionSolutionsBridge || this.config.maxPartitionSolutions || 4;
+
+      for (let groupIndex = 0; groupIndex < state.table.length; groupIndex += 1) {
+        if (this.isTimedOut(ctx)) break;
+        const group = state.table[groupIndex];
+        const sourceAnalysis = RummyRules.explainGroup(group);
+        if (!sourceAnalysis.valid || !sourceAnalysis.jokerAssignments || sourceAnalysis.jokerAssignments.length === 0) continue;
+
+        for (const assignment of sourceAnalysis.jokerAssignments) {
+          if (this.isTimedOut(ctx)) break;
+          const jokerTile = group.find(tile => tile.id === assignment.tileId);
+          if (!jokerTile) continue;
+
+          const isExactReplacementTile = tile =>
+            !tile.joker
+            && tile.number === assignment.actsAsNumber
+            && (!assignment.actsAsColor || tile.color === assignment.actsAsColor);
+          const replacementOptions = state.rack
+            .filter(isExactReplacementTile)
+            .map(tile => ({
+              source: "rack",
+              tile,
+              donorGroupIndex: null,
+              donorRemainingGroups: []
+            }));
+
+          if ((this.config.maxTouchedGroups || 1) >= 2) {
+            for (let otherIndex = 0; otherIndex < state.table.length; otherIndex += 1) {
+              if (otherIndex === groupIndex) continue;
+              const donorPlans = this.getRemovalPlans(state.table[otherIndex], ctx, {
+                maxRemove: 1,
+                maxSolutions: 4,
+                allowZero: false
+              });
+              donorPlans.forEach(plan => {
+                if (plan.removedTiles.length !== 1) return;
+                const donorTile = plan.removedTiles[0];
+                if (!isExactReplacementTile(donorTile)) return;
+                replacementOptions.push({
+                  source: "table",
+                  tile: donorTile,
+                  donorGroupIndex: otherIndex,
+                  donorRemainingGroups: deepCopy(plan.remainingGroups)
+                });
+              });
+            }
+          }
+
+          for (const option of replacementOptions) {
+            if (this.isTimedOut(ctx)) break;
+            const replacement = option.tile;
+            const substitutedGroup = normalizeGroupTiles(
+              group
+                .filter(tile => tile.id !== jokerTile.id)
+                .concat(replacement)
+            );
+            const substitutedAnalysis = RummyRules.explainGroup(substitutedGroup);
+            if (!substitutedAnalysis.valid) continue;
+
+            const externalPlans = [{
+              groupIndex: null,
+              removedTiles: [],
+              remainingGroups: []
+            }];
+            if (option.source === "rack" && (this.config.maxTouchedGroups || 1) >= 2) {
+              for (let otherIndex = 0; otherIndex < state.table.length; otherIndex += 1) {
+                if (otherIndex === groupIndex) continue;
+                const plans = this.getRemovalPlans(state.table[otherIndex], ctx, {
+                  maxRemove: this.config.maxRemovedPerGroup || 1,
+                  maxSolutions: 2,
+                  allowZero: false
+                });
+                plans.forEach(plan => {
+                  if (plan.removedTiles.length === 0) return;
+                  externalPlans.push({
+                    groupIndex: otherIndex,
+                    removedTiles: plan.removedTiles,
+                    remainingGroups: plan.remainingGroups
+                  });
+                });
+              }
+            }
+
+            for (const plan of externalPlans) {
+              if (this.isTimedOut(ctx)) break;
+              const seedTableTiles = [jokerTile, ...plan.removedTiles];
+              const rackSubsets = this.getRearrangementRackSubsets(state, ctx, seedTableTiles)
+                .filter(subset => !subset.ids.includes(replacement.id));
+
+              for (const subset of rackSubsets) {
+                if (this.isTimedOut(ctx)) break;
+                const pool = [jokerTile, ...plan.removedTiles, ...subset.tiles];
+                if (pool.length < 3 || pool.length > (this.config.maxPoolTiles || 10)) continue;
+
+                const partitions = RummyAIUtils.findExactCoverPartitions(pool, ctx.poolGroupCache, {
+                  maxSolutions
+                });
+
+                partitions.slice(0, maxSolutions).forEach(partition => {
+                  if (!partition.groups.some(createdGroup => createdGroup.some(tile => tile.id === jokerTile.id))) return;
+
+                  const replacementLabel = option.source === "table"
+                    ? `${(option.donorGroupIndex || 0) + 1}번 줄의 ${formatTileText(replacement)}`
+                    : `손패 ${formatTileText(replacement)}`;
+                  const sourceGroupIndices = option.source === "table"
+                    ? [groupIndex, option.donorGroupIndex]
+                    : (plan.groupIndex === null ? [groupIndex] : [groupIndex, plan.groupIndex]);
+                  const sourceTableIds = option.source === "table"
+                    ? [jokerTile.id, replacement.id]
+                    : [jokerTile.id, ...plan.removedTiles.map(tile => tile.id)];
+                  const sourceRackIds = option.source === "table"
+                    ? [...subset.ids]
+                    : [replacement.id, ...subset.ids];
+                  const retainedGroups = option.source === "table"
+                    ? [substitutedGroup, ...deepCopy(option.donorRemainingGroups)]
+                    : [substitutedGroup, ...plan.remainingGroups];
+                  const detailText = option.source === "table"
+                    ? `${groupIndex + 1}번 줄의 조커를 ${replacementLabel}로 대체하고, 해방된 조커를 다시 활용하세요.`
+                    : `${groupIndex + 1}번 줄의 조커를 ${replacementLabel}로 대체하고, 해방된 조커로 새 줄을 만드세요.`;
+                  const jokerRoleText = assignment.actsAsColor
+                    ? `${assignment.actsAsNumber}${getColorIcon(assignment.actsAsColor)}`
+                    : `${assignment.actsAsNumber}`;
+                  const jokerNote = option.source === "table"
+                    ? `${groupIndex + 1}번 줄의 조커 ${jokerRoleText} 역할을 ${replacementLabel}로 치환해 다른 줄에 재활용하세요.`
+                    : `${groupIndex + 1}번 줄의 조커 ${jokerRoleText} 역할을 ${replacementLabel}로 대체하고 다른 줄에 재사용하세요.`;
+
+                  const candidate = this.createRearrangedState(state, ctx, {
+                    mode: "joker-sub",
+                    sourceGroupIndices,
+                    sourceTableIds,
+                    sourceRackIds,
+                    retainedGroups,
+                    createdGroups: partition.groups,
+                    detailText,
+                    jokerAssignments: partition.groups.flatMap(createdGroup => RummyRules.explainGroup(createdGroup).jokerAssignments || []),
+                    jokerNote,
+                    statBoost: {
+                      jokerRelocationCount: 1,
+                      jokerEfficiency: Math.max(2, 6 - (subset.size + plan.removedTiles.length)),
+                      jokerTrap: partition.groups.some(createdGroup => createdGroup.length === 3) ? 1 : 0
+                    }
+                  });
+                  if (candidate) candidates.push(candidate);
+                });
+              }
+            }
+          }
+        }
+      }
+
+      return candidates;
+    };
+
+    AILevel6Strategy.prototype.ensureAdvancedJokerChainConfig = function() {
+      this.config = {
+        ...this.config,
+        advancedJokerChainQuota: this.config.advancedJokerChainQuota ?? 2,
+        advancedJokerChainMaxSupportPlans: this.config.advancedJokerChainMaxSupportPlans ?? 3,
+        advancedJokerChainMaxRackSubsetSize: this.config.advancedJokerChainMaxRackSubsetSize ?? 2,
+        advancedJokerChainMaxPoolTiles: this.config.advancedJokerChainMaxPoolTiles ?? 5,
+        advancedJokerChainMaxSolutions: this.config.advancedJokerChainMaxSolutions ?? 2,
+        advancedJokerChainMinRackCount: this.config.advancedJokerChainMinRackCount ?? 0,
+        advancedJokerChainOnlyWhenBoosted: this.config.advancedJokerChainOnlyWhenBoosted ?? false
+      };
+    };
+
+    AILevel6Strategy.prototype.shouldUseAdvancedJokerChain = function(state, ctx) {
+      this.ensureAdvancedJokerChainConfig();
+      if (this.isTimedOut(ctx)) return false;
+      if ((this.config.maxTouchedGroups || 0) < 3) return false;
+      if (!state.opened) return false;
+      if (state.table.length < 3) return false;
+      if (state.rack.length < (this.config.advancedJokerChainMinRackCount || 0)) return false;
+
+      const hasSingleJokerSource = state.table.some(group => {
+        const jokerCount = group.filter(tile => tile.joker).length;
+        const analysis = RummyRules.explainGroup(group);
+        return jokerCount === 1 && analysis.valid && (analysis.jokerAssignments || []).length > 0;
+      });
+      if (!hasSingleJokerSource) return false;
+
+      if (!this.config.advancedJokerChainOnlyWhenBoosted) return true;
+
+      const opponentRacks = ctx.gameState.playersMeta
+        .filter((_, index) => index !== ctx.gameState.turnIndex)
+        .map(player => player.rackCount);
+      const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
+      return state.rack.length <= 8 || smallestOpponentRack <= 5 || (ctx.gameState.bagCount || 0) <= 18;
+    };
+
+    AILevel6Strategy.prototype.generateAdvancedJokerChainMoves = function(state, ctx) {
+      this.ensureAdvancedJokerChainConfig();
+      const candidates = [];
+      const maxSupportPlans = this.config.advancedJokerChainMaxSupportPlans || 3;
+      const maxRackSubsetSize = this.config.advancedJokerChainMaxRackSubsetSize || 2;
+      const maxPoolTiles = this.config.advancedJokerChainMaxPoolTiles || 5;
+      const maxSolutions = this.config.advancedJokerChainMaxSolutions || 2;
+
+      for (let sourceIndex = 0; sourceIndex < state.table.length; sourceIndex += 1) {
+        if (this.isTimedOut(ctx)) break;
+        const sourceGroup = state.table[sourceIndex];
+        const sourceJokers = sourceGroup.filter(tile => tile.joker);
+        if (sourceJokers.length !== 1) continue;
+
+        const sourceAnalysis = RummyRules.explainGroup(sourceGroup);
+        if (!sourceAnalysis.valid || !sourceAnalysis.jokerAssignments || sourceAnalysis.jokerAssignments.length === 0) continue;
+
+        const jokerTile = sourceJokers[0];
+        const assignments = sourceAnalysis.jokerAssignments.filter(assignment => assignment.tileId === jokerTile.id);
+        for (const assignment of assignments) {
+          if (this.isTimedOut(ctx)) break;
+          const isExactReplacementTile = tile =>
+            !tile.joker
+            && tile.number === assignment.actsAsNumber
+            && (!assignment.actsAsColor || tile.color === assignment.actsAsColor);
+
+          for (let replacementIndex = 0; replacementIndex < state.table.length; replacementIndex += 1) {
+            if (this.isTimedOut(ctx)) break;
+            if (replacementIndex === sourceIndex) continue;
+
+            const replacementPlans = this.getRemovalPlans(state.table[replacementIndex], ctx, {
+              maxRemove: 1,
+              maxSolutions: 3,
+              allowZero: false
+            });
+
+            for (const replacementPlan of replacementPlans) {
+              if (this.isTimedOut(ctx)) break;
+              if (replacementPlan.removedTiles.length !== 1) continue;
+              const replacementDonorTile = replacementPlan.removedTiles[0];
+              if (!isExactReplacementTile(replacementDonorTile)) continue;
+
+              const substitutedGroup = normalizeGroupTiles(
+                sourceGroup
+                  .filter(tile => tile.id !== jokerTile.id)
+                  .concat(replacementDonorTile)
+              );
+              if (!RummyRules.explainGroup(substitutedGroup).valid) continue;
+
+              for (let supportIndex = 0; supportIndex < state.table.length; supportIndex += 1) {
+                if (this.isTimedOut(ctx)) break;
+                if (supportIndex === sourceIndex || supportIndex === replacementIndex) continue;
+
+                const supportPlans = this.getRemovalPlans(state.table[supportIndex], ctx, {
+                  maxRemove: 1,
+                  maxSolutions: maxSupportPlans,
+                  allowZero: false
+                });
+
+                for (const supportPlan of supportPlans) {
+                  if (this.isTimedOut(ctx)) break;
+                  if (supportPlan.removedTiles.length !== 1) continue;
+                  const supportTile = supportPlan.removedTiles[0];
+                  if (!supportTile || supportTile.joker) continue;
+
+                  const rackSubsets = this.getRearrangementRackSubsets(state, ctx, [jokerTile, supportTile])
+                    .filter(subset =>
+                      subset.size >= 1
+                      && subset.size <= maxRackSubsetSize
+                      && !subset.ids.includes(replacementDonorTile.id)
+                    );
+
+                  for (const subset of rackSubsets) {
+                    if (this.isTimedOut(ctx)) break;
+                    const pool = [jokerTile, supportTile, ...subset.tiles];
+                    if (pool.length < 3 || pool.length > maxPoolTiles) continue;
+
+                    const partitions = RummyAIUtils.findExactCoverPartitions(pool, ctx.poolGroupCache, {
+                      maxSolutions
+                    });
+
+                    partitions.slice(0, maxSolutions).forEach(partition => {
+                      const chainGroup = partition.groups.find(createdGroup =>
+                        createdGroup.some(tile => tile.id === jokerTile.id)
+                        && createdGroup.some(tile => tile.id === supportTile.id)
+                      );
+                      if (!chainGroup) return;
+
+                      const detailText = `${sourceIndex + 1}번 줄의 조커를 ${replacementIndex + 1}번 줄의 ${formatTileText(replacementDonorTile)}로 대체하고, 해방된 조커를 ${supportIndex + 1}번 줄의 ${formatTileText(supportTile)}와 다시 묶으세요.`;
+                      const jokerNote = `${sourceIndex + 1}번 줄 조커를 ${replacementIndex + 1}번 줄 타일로 치환한 뒤, ${supportIndex + 1}번 줄 타일과 함께 재활용하세요.`;
+
+                      const candidate = this.createRearrangedState(state, ctx, {
+                        mode: "joker-chain",
+                        sourceGroupIndices: [sourceIndex, replacementIndex, supportIndex],
+                        sourceTableIds: [jokerTile.id, replacementDonorTile.id, supportTile.id],
+                        sourceRackIds: subset.ids,
+                        retainedGroups: [
+                          substitutedGroup,
+                          ...deepCopy(replacementPlan.remainingGroups),
+                          ...deepCopy(supportPlan.remainingGroups)
+                        ],
+                        createdGroups: partition.groups,
+                        detailText,
+                        jokerAssignments: partition.groups.flatMap(createdGroup => RummyRules.explainGroup(createdGroup).jokerAssignments || []),
+                        jokerNote,
+                        statBoost: {
+                          jokerRelocationCount: 1,
+                          jokerEfficiency: 3,
+                          jokerTrap: partition.groups.some(createdGroup => createdGroup.length === 3) ? 1 : 0
+                        }
+                      });
+                      if (candidate) candidates.push(candidate);
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return candidates;
+    };
+
+    AILevel6Strategy.prototype.generateRearrangementMoves = function(state, ctx) {
+      this.ensureAdvancedJokerChainConfig();
+      const baseMoves = AIBaseStrategy.prototype.generateRearrangementMoves.call(this, state, ctx);
+      if (!this.shouldUseAdvancedJokerChain(state, ctx)) {
+        return baseMoves;
+      }
+
+      const chainMoves = this.pickQuota(
+        this.generateAdvancedJokerChainMoves(state, ctx),
+        ctx,
+        this.config.advancedJokerChainQuota || 0
+      );
+
+      return this.dedupeAndSortCandidates(
+        [...baseMoves, ...chainMoves],
+        ctx,
+        this.config.maxRearrangeBranches
+      );
+    };
+
+    RummyHintEngine.buildStrategicDrawComment = function(move) {
+      const meta = move.drawMeta || {};
+      if (move.drawReasonCode === "hold-opening") {
+        return {
+          title: "AI-6 힌트",
+          summary: move.summary || "전략 드로우",
+          shortText: "등록 보류 드로우",
+          reason: "등록은 가능하지만 현재 수는 손패를 많이 줄이지 못하고 패 구조도 약하게 만듭니다. 더 강한 등록 타이밍을 노리는 편이 좋습니다.",
+          leadText: "추천: 지금은 등록을 미루고 1장을 뽑으세요.",
+          steps: ["1장 뽑기 버튼을 눌러 턴을 마무리하세요."],
+          futureBenefit: meta.bagCount >= 10 && meta.opponentMinRack >= 7
+            ? "가방과 상대 손패 여유가 있어, 지금 약하게 열기보다 더 강한 등록 타이밍을 노리는 편이 좋습니다."
+            : ""
+        };
+      }
+      if (move.drawReasonCode === "preserve-shape") {
+        return {
+          title: "AI-6 힌트",
+          summary: move.summary || "전략 드로우",
+          shortText: "구조 보존 드로우",
+          reason: "현재 수는 가능하지만 손패 구조를 많이 깨거나 조커를 소모합니다. 지금은 연결 형태를 보존하는 편이 더 유리합니다.",
+          leadText: "추천: 약한 1장 플레이 대신 1장을 뽑으세요.",
+          steps: ["1장 뽑기 버튼을 눌러 턴을 마무리하세요."],
+          futureBenefit: meta.futureLoss > 0 || meta.futureMobilityLoss > 0
+            ? "지금 구조를 보존하면 다음 턴에 더 자연스럽고 강한 연결을 만들 가능성이 높습니다."
+            : ""
+        };
+      }
+      return {
+        title: "AI-6 힌트",
+        summary: move.summary || "전략 드로우",
+        shortText: "전략 드로우",
+        reason: "현재 플레이보다 드로우가 더 안정적인 선택입니다.",
+        leadText: "추천: 이번 턴은 1장을 뽑으세요.",
+        steps: ["1장 뽑기 버튼을 눌러 턴을 마무리하세요."],
+        futureBenefit: ""
+      };
+    };
+
+    RummyHintEngine.getHint = function(gameState) {
+      const move = RummyAI.chooseMove(gameState, 6);
+      if (move && move.type === "draw") {
+        const comment = this.buildStrategicDrawComment(move);
+        return {
+          title: comment.title,
+          summary: comment.summary,
+          shortText: comment.shortText,
+          reason: comment.reason,
+          leadText: comment.leadText,
+          moveType: "draw",
+          score: move.score || 0,
+          rackTileIds: [],
+          tableTileIds: [],
+          targetGroupIndices: [],
+          steps: comment.steps,
+          futureBenefit: comment.futureBenefit || "",
+          openingScore: 0,
+          hintSource: "strategic-draw",
+          engineMissFallback: false
+        };
+      }
+      if (!move) {
+        const reason = !gameState.currentPlayer.opened && gameState.ruleOptions.initial30
+          ? "아직 30점 등록 전이라 기존 테이블만으로는 유효한 수를 만들기 어렵습니다."
+          : gameState.table.length > 0
+            ? "현재 탐색 범위 안에서는 추가 유효 수를 찾지 못했습니다."
+            : "현재 상태에서는 손패를 안전하게 줄이면서 유효한 새 줄을 만들기 어렵습니다.";
+        return {
+          title: "AI-6 힌트",
+          summary: "1장 뽑기",
+          shortText: "드로우 추천",
+          reason,
+          leadText: "추천: 이번 턴은 1장을 뽑는 쪽을 우선 고려하세요.",
+          moveType: "draw",
+          score: 0,
+          rackTileIds: [],
+          tableTileIds: [],
+          targetGroupIndices: [],
+          steps: ["1장 뽑기 버튼을 눌러 턴을 진행하세요."],
+          openingScore: 0,
+          hintSource: "no-move",
+          engineMissFallback: true
+        };
+      }
+
+      const tileLookup = new Map(
+        [...gameState.currentPlayer.rack, ...gameState.table.flat(), ...move.table.flat()].map(tile => [tile.id, tile])
+      );
+      const rackTileIds = new Set();
+      const tableTileIds = new Set();
+      const targetGroupIndices = new Set();
+      const steps = [];
+      const touchedGroupLabels = new Set();
+      const createdGroupsSummary = [];
+      const preservedGroupsSummary = [];
+      const openingBreakdown = (move.openingDetails || []).map(group => `${formatTileList(group.tiles || [])} = ${group.score}점`);
+
+      move.actions.forEach(action => {
+        const sourceRackTiles = (action.sourceRackIds || []).map(id => tileLookup.get(id)).filter(Boolean);
+        const sourceTableTiles = (action.sourceTableIds || []).map(id => tileLookup.get(id)).filter(Boolean);
+        (action.sourceGroupIndices || []).forEach(index => touchedGroupLabels.add(`${index + 1}번 줄`));
+
+        if (action.type === "new-group") {
+          (action.sourceRackIds || []).forEach(id => rackTileIds.add(id));
+          const groupIndices = findGroupIndicesByTileIds(move.table, [action.createdGroupIds]);
+          groupIndices.forEach(index => targetGroupIndices.add(index));
+          createdGroupsSummary.push(formatTileList((action.createdGroupIds || []).map(id => tileLookup.get(id)).filter(Boolean)));
+          steps.push(`손패의 ${formatTileList(sourceRackTiles)}로 새 줄을 만드세요.`);
+          steps.push("새 줄 버튼을 눌러 조합을 확정하세요.");
+          return;
+        }
+
+        if (action.type === "append") {
+          (action.sourceRackIds || []).forEach(id => rackTileIds.add(id));
+          const resultIndices = findGroupIndicesByTileIds(move.table, [action.resultGroupIds]);
+          resultIndices.forEach(index => targetGroupIndices.add(index));
+          const targetIndex = resultIndices[0];
+          const tileText = formatTileList(sourceRackTiles);
+          steps.push(`${tileText}을 ${targetIndex !== undefined ? `${targetIndex + 1}번 줄` : "강조된 줄"}에 추가하세요.`);
+          return;
+        }
+
+        if (action.type === "rearrange") {
+          (action.sourceRackIds || []).forEach(id => rackTileIds.add(id));
+          (action.sourceTableIds || []).forEach(id => tableTileIds.add(id));
+          findGroupIndicesByTileIds(move.table, action.resultGroupIds || []).forEach(index => targetGroupIndices.add(index));
+          const groupText = (action.sourceGroupIndices || []).map(index => `${index + 1}번 줄`).join(", ");
+          const sourceText = sourceTableTiles.length > 0 ? formatTileList(sourceTableTiles) : "강조된 타일";
+          const rackText = sourceRackTiles.length > 0 ? ` 손패의 ${formatTileList(sourceRackTiles)}도 함께 사용하세요.` : "";
+          steps.push(`${groupText || "강조된 줄"}에서 ${sourceText}을 꺼내 재배열하세요.${rackText}`);
+          (action.resultGroupIds || []).forEach(groupIds => {
+            const targetIndex = findGroupIndicesByTileIds(move.table, [groupIds])[0];
+            const groupTiles = groupIds.map(id => tileLookup.get(id)).filter(Boolean);
+            if (groupTiles.length === 0) return;
+            if ((action.sourceTableIds || []).some(id => groupIds.includes(id))) {
+              preservedGroupsSummary.push(formatTileList(groupTiles));
+            } else {
+              createdGroupsSummary.push(formatTileList(groupTiles));
+            }
+            steps.push(`${targetIndex !== undefined ? `${targetIndex + 1}번 줄` : "결과 줄"}을 ${formatTileList(groupTiles)} 형태로 맞추세요.`);
+          });
+        }
+      });
+
+      const openingScore = move.openingScore || 0;
+      const jokerNotes = move.jokerNotes || [];
+      jokerNotes.forEach(note => {
+        if (note && !steps.includes(note)) steps.push(note);
+      });
+      if (!gameState.currentPlayer.opened && gameState.ruleOptions.initial30 && openingScore >= 30 && openingBreakdown.length > 0) {
+        steps.unshift(`이번 수는 ${openingScore}점으로 30점 등록을 충족합니다.`);
+        openingBreakdown.slice().reverse().forEach(line => {
+          steps.unshift(line);
+        });
+      }
+
+      const leadText = move.type === "rearrange"
+        ? `추천: ${move.summary}로 테이블을 재정리하세요.`
+        : move.type === "append"
+          ? "추천: 기존 줄에 1장을 추가하세요."
+          : `추천: ${move.summary}를 실행하세요.`;
+      const reason = !gameState.currentPlayer.opened && gameState.ruleOptions.initial30 && openingScore >= 30
+        ? `손패 ${move.rackReduction}장을 줄이면서 초기 등록 ${openingScore}점을 충족합니다.`
+        : move.type === "rearrange"
+          ? `손패 ${move.rackReduction}장을 줄이면서 기존 테이블을 안정적으로 재정리할 수 있습니다.`
+          : move.rackReduction > 0
+            ? `이번 턴에 손패 ${move.rackReduction}장을 줄일 수 있는 최선의 수입니다.`
+            : "현재 상태에서는 추가 이득보다 안정적인 정리가 더 중요합니다.";
+      const futureBenefit = move.futureMobility > 0
+        ? `이후 손패 중 ${move.futureMobility}장은 다음 턴에도 기존 줄과 연결될 가능성이 높습니다.`
+        : "이후 손패는 다음 턴에 새 조합 중심으로 다뤄야 할 가능성이 큽니다.";
+      const shortParts = [];
+      if (move.stats.rearrangeCount > 0) shortParts.push(`재배열 ${move.stats.rearrangeCount}회`);
+      if (move.stats.newGroupCount > 0) shortParts.push(`새 줄 ${move.stats.newGroupCount}개`);
+      if (move.stats.appendCount > 0) shortParts.push(`줄 추가 ${move.stats.appendCount}회`);
+
+      return {
+        title: "AI-6 힌트",
+        summary: move.summary,
+        shortText: shortParts.join(" · ") || move.summary,
+        reason,
+        leadText,
+        moveType: move.type,
+        score: move.score,
+        rackTileIds: [...rackTileIds],
+        tableTileIds: [...tableTileIds],
+        targetGroupIndices: [...targetGroupIndices],
+        steps: steps.length > 0 ? steps : ["강조된 대상과 줄을 순서대로 진행하세요."],
+        openingScore,
+        openingBreakdown,
+        touchedGroupLabels: [...touchedGroupLabels],
+        createdGroupsSummary,
+        preservedGroupsSummary,
+        futureBenefit,
+        hintSource: "move",
+        engineMissFallback: false
+      };
+    };
+
+    Game.prototype.buildGameStateForAI = function(options = {}) {
+      const state = {
+        currentPlayer: {
+          rack: deepCopy(this.currentPlayer.rack),
+          opened: this.currentPlayer.opened,
+          aiLevel: this.currentPlayer.aiLevel
+        },
+        table: deepCopy(this.workingTable),
+        baseTableCount: this.baseTableCount,
+        bagCount: this.bag.length,
+        ruleOptions: deepCopy(this.ruleOptions),
+        playersMeta: this.players.map((player, index) => ({
+          index,
+          rackCount: player.rack.length,
+          opened: player.opened,
+          type: player.type,
+          aiLevel: player.aiLevel
+        })),
+        turnIndex: this.turn,
+        consecutiveStrategicDrawsByPlayer: [...this.consecutiveStrategicDrawsByPlayer],
+        openingHoldDrawUsed: [...this.openingHoldDrawUsed]
+      };
+      if (options.hintMode) {
+        state.hintMode = true;
+        state.turnStartRackSize = this.getTurnStartRackSize();
+        state.alreadyReducedRackThisTurn = this.hasReducedRackThisTurn();
+      }
+      if (this.currentPlayer.aiLevel === 6 || options.hintMode) {
+        state.tileTracker = this.buildTileTracker(this.turn);
+      }
+      return state;
+    };
+
+    Game.prototype.requestHint = function() {
+      if (this.gameOver || !this.currentPlayer || this.currentPlayer.type !== "HUMAN") return;
+      if (this.drewTileThisTurn) {
+        ui.toast("1장을 뽑은 뒤에는 힌트 대신 턴 종료만 할 수 있습니다.");
+        return;
+      }
+      if (!this.canUseHint()) {
+        ui.toast("사용 가능한 힌트가 없습니다.");
+        return;
+      }
+
+      const hasAction = this.actionHistory.length > 0;
+      const gameState = this.buildGameStateForAI({ hintMode: true });
+      const hint = RummyHintEngine.getHint(gameState);
+      if (hasAction && hint.moveType === "draw" && hint.hintSource === "strategic-draw" && !this.hasReducedRackThisTurn()) {
+        hint.title = hint.title || "AI-6 힌트";
+        hint.rackTileIds = [];
+        hint.tableTileIds = [];
+        hint.targetGroupIndices = [];
+        hint.summary = "되돌린 뒤 1장 뽑기";
+        hint.shortText = "되돌린 뒤 드로우";
+        hint.leadText = "추천: 지금 배치를 유지하기보다 되돌린 뒤 1장을 뽑는 편이 낫습니다.";
+        hint.reason = `${hint.reason || "현재 배치보다 드로우 선택이 더 낫습니다."} 이번 배치를 되돌린 뒤 1장을 뽑으세요.`;
+        hint.steps = [
+          "무르기 버튼으로 현재 배치를 되돌리세요.",
+          "1장 뽑기 버튼을 눌러 턴을 진행하세요."
+        ];
+        hint.moveType = "undo-draw";
+      } else if (hasAction && hint.moveType === "draw" && hint.hintSource === "strategic-draw") {
+        const allValid = this.workingTable.every(group =>
+          group.length === 0 || RummyRules.analyzeGroup(group).valid
+        );
+        hint.title = hint.title || "AI-6 힌트";
+        hint.rackTileIds = [];
+        hint.tableTileIds = [];
+        hint.targetGroupIndices = [];
+        if (allValid) {
+          hint.summary = "현재 배치 확정";
+          hint.shortText = "전략 드로우 차선";
+          hint.leadText = "추천: 원래는 드로우 판단이 더 좋았지만, 지금은 현재 배치를 확정하는 편이 낫습니다.";
+          hint.reason = "이번 턴 초반에는 드로우가 더 좋았지만 이미 손패를 줄여 드로우로 되돌리기 어렵습니다. 현재 배치를 확정하세요.";
+          hint.steps = ["턴 종료 버튼을 눌러 현재 배치를 확정하세요."];
+          hint.moveType = "end-turn";
+        } else {
+          hint.summary = "되돌리기";
+          hint.shortText = "전략 드로우 재선택";
+          hint.leadText = "추천: 현재 배치가 유효하지 않습니다. 되돌린 뒤 다시 판단하세요.";
+          hint.reason = "이 상황은 전략 드로우가 더 나았지만 현재 배치가 유효하지 않아 그대로 끝낼 수 없습니다. 되돌린 뒤 다시 선택하세요.";
+          hint.steps = [
+            "무르기 버튼으로 현재 배치를 되돌리세요.",
+            "다시 수를 보거나 턴을 정리하세요."
+          ];
+          hint.moveType = "undo";
+        }
+      } else if (hasAction && hint.moveType === "draw" && hint.hintSource === "no-move") {
+        const allValid = this.workingTable.every(group =>
+          group.length === 0 || RummyRules.analyzeGroup(group).valid
+        );
+        hint.title = hint.title || "AI-6 힌트";
+        hint.rackTileIds = [];
+        hint.tableTileIds = [];
+        hint.targetGroupIndices = [];
+        hint.engineMissFallback = true;
+        if (allValid) {
+          hint.summary = "현재 배치 확정";
+          hint.shortText = "추가 수 미탐지";
+          hint.leadText = "현재 배치는 유효합니다. 현재 탐색 범위에서는 추가 수를 찾지 못했습니다.";
+          hint.reason = "엔진이 현재 탐색 범위 안에서 추가 수를 찾지 못해 현재 배치 확정을 권장합니다.";
+          hint.steps = ["턴 종료 버튼을 눌러 현재 배치를 확정하세요."];
+          hint.moveType = "end-turn";
+        } else {
+          hint.summary = "추가 수 미탐지";
+          hint.shortText = "무효 줄 존재";
+          hint.leadText = "현재 탐색 범위에서는 추가 수를 찾지 못했고, 지금 배치에는 유효하지 않은 줄이 남아 있습니다.";
+          hint.reason = "엔진이 현재 탐색 범위 안에서 추가 수를 찾지 못했습니다. 현재 배치는 유효하지 않으므로 되돌리거나 직접 더 정리해야 합니다.";
+          hint.steps = [
+            "무르기 버튼으로 현재 배치를 되돌리거나,",
+            "직접 추가 수를 배치해 모든 줄을 유효하게 만드세요."
+          ];
+          hint.moveType = "undo";
+        }
+      }
+      if (this.currentPlayer.hintsRemaining !== null) {
+        this.currentPlayer.hintsRemaining = Math.max(0, this.currentPlayer.hintsRemaining - 1);
+      }
+      this.lastHint = hint;
+      ui.showHint(hint);
+      ui.updateAll();
+      if (hint.engineMissFallback) {
+        ui.toast("현재 탐색 범위에서는 추가 수를 찾지 못했습니다.");
+      } else if (hint.moveType === "draw") {
+        ui.toast("이번 턴 추천은 드로우입니다.");
+      } else if (hint.moveType === "undo-draw") {
+        ui.toast("되돌린 뒤 드로우를 권장합니다.");
+      } else if (hint.moveType === "end-turn") {
+        ui.toast("턴 종료를 권장합니다.");
+      } else if (hint.moveType === "undo") {
+        ui.toast("무르기나 추가 배치가 필요합니다.");
+      } else {
+        ui.toast("추천 대상과 줄을 강조했습니다.");
+      }
+    };
 
     const ui = {
       showScreen(id) {
