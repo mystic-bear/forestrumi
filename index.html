@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>숲속 루미큐브 4인 테이블</title>
+  <title>숲속 루미큐브 AI 4인용</title>
   <style>
     :root {
       --bg: #2e7d32;
@@ -42,6 +42,17 @@
       color: white;
       overflow-x: hidden;
       overflow-y: auto;
+      transition: background 0.6s ease;
+    }
+
+    body .table-shell,
+    body .panel,
+    body .rack-panel {
+      transition: background 0.6s ease, border-color 0.6s ease;
+    }
+
+    body.night-mode {
+      background: radial-gradient(circle at top, #1a1a2e, #0f0f1a);
     }
 
     button {
@@ -217,6 +228,11 @@
 
     .state-human { background: #4caf50; color: white; }
     .state-ai { background: #ff7043; color: white; }
+    .state-ai-6 {
+      background: linear-gradient(135deg, #4a148c, #1a237e);
+      color: #e8e0ff;
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
     .state-off { background: #cfd8dc; color: #607d8b; }
     .state-on { background: #43a047; color: white; }
     .state-off-option { background: #b0bec5; color: #455a64; }
@@ -497,6 +513,43 @@
       overflow: hidden;
     }
 
+    body.night-mode .table-shell {
+      background: linear-gradient(180deg, #2a1f3d, #1e1633);
+      border-color: rgba(138, 120, 180, 0.15);
+    }
+
+    body.night-mode .panel {
+      background: rgba(15, 10, 30, 0.55);
+      border-color: rgba(138, 120, 180, 0.12);
+    }
+
+    body.night-mode .rack-panel {
+      background: rgba(15, 10, 30, 0.45);
+      border-color: rgba(138, 120, 180, 0.12);
+    }
+
+    body.night-mode .group-card {
+      background: rgba(240, 235, 255, 0.94);
+    }
+
+    body.night-mode .table-area {
+      background: rgba(100, 80, 160, 0.10);
+    }
+
+    body.night-mode .player-card.active {
+      background: rgba(138, 120, 180, 0.20);
+    }
+
+    body.night-mode .mini-chip,
+    body.night-mode .chip {
+      background: rgba(138, 120, 180, 0.15);
+      border-color: rgba(138, 120, 180, 0.15);
+    }
+
+    body.night-mode .empty-table {
+      border-color: rgba(138, 120, 180, 0.25);
+    }
+
     .rack-head {
       display: flex;
       justify-content: space-between;
@@ -566,6 +619,21 @@
     .tile.drawn {
       border-color: #81c784;
       box-shadow: 0 0 0 3px rgba(129, 199, 132, 0.24), 0 10px 18px rgba(0, 0, 0, 0.2);
+    }
+
+    .tile.facedown {
+      background: linear-gradient(135deg, #5d4037, #795548);
+      border-color: #4e342e;
+      cursor: default;
+    }
+
+    .tile.facedown .tile-num {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 1.2rem;
+    }
+
+    .tile.facedown .tile-icon {
+      opacity: 0.3;
     }
 
     .tile.hint {
@@ -839,8 +907,9 @@
         <div id="rule-options-setup" class="setup-container"></div>
 
         <div class="setup-note">
-          HUMAN / AI-1 / AI-2 / AI-3 / AI-4 / AI-5 / OFF 순서로 바뀝니다.<br />
-          AI-1 초급, AI-2 쉬움, AI-3 보통, AI-4 어려움, AI-5 최상 단계로 난이도가 올라갑니다.<br />
+          HUMAN / AI-1 / AI-2 / AI-3 / AI-4 / AI-5 / AI-6 / OFF 순서로 바뀝니다.<br />
+          AI-1 초급, AI-2 쉬움, AI-3 보통, AI-4 어려움, AI-5 최상, AI-6 챌린지 단계로 난이도가 올라갑니다.<br />
+          AI-6은 타일 카운팅을 사용하는 챌린지 모드입니다.<br />
           30점 등록 룰을 켜면 각 플레이어는 첫 성공 턴에 자기 손패만으로 30점 이상 새 줄을 등록해야 하고, 그 전엔 기존 테이블을 건드릴 수 없습니다.
         </div>
 
@@ -898,8 +967,8 @@
       <aside class="panel panel-right">
         <div>
           <div class="info-box">
-            <div id="info-title" class="info-title">플레이 가이드</div>
-            <div id="info-text" class="info-text">손패/테이블 타일 여러 장 선택 → 새 줄 생성, 또는 줄 선택 → 줄에 추가 순서로 진행하세요.</div>
+            <div id="info-title" class="info-title">플레이 안내</div>
+            <div id="info-text" class="info-text">손패 타일뿐 아니라 테이블 타일까지 선택해서 새 줄 만들기와 줄에 추가가 가능합니다. 턴 종료 시 모든 줄이 유효해야 합니다.</div>
           </div>
 
           <div class="control-stack" style="margin-top:14px;">
@@ -908,11 +977,11 @@
               <button id="btn-sort-number" class="btn btn-sort" onclick="game.sortRack('number')">🔢 숫자 정렬</button>
             </div>
             <div class="control-row">
-              <button id="btn-new-group" class="btn btn-grouping" onclick="game.createGroupFromSelection()">➕ 새 줄</button>
-              <button id="btn-append-group" class="btn btn-grouping" onclick="game.appendSelectionToSelectedGroup()">📥 줄에 추가</button>
+              <button id="btn-new-group" class="btn btn-grouping" onclick="game.createGroupFromSelection()">✨ 새 줄</button>
+              <button id="btn-append-group" class="btn btn-grouping" onclick="game.appendSelectionToSelectedGroup()">➕ 줄에 추가</button>
             </div>
             <div class="control-row">
-              <button id="btn-clear-select" class="btn btn-clear" onclick="game.clearSelections()">❎ 선택 해제</button>
+              <button id="btn-clear-select" class="btn btn-clear" onclick="game.clearSelections()">🧹 선택 해제</button>
               <button id="btn-undo-action" class="btn btn-undo" onclick="game.undoTurnAction()">↩️ 무르기</button>
             </div>
             <div class="control-row">
@@ -953,34 +1022,36 @@
 
     const PLAYER_PRESETS = [
       { slot: 0, name: "토끼", icon: "🐰", accent: "var(--p1)" },
-      { slot: 1, name: "너구리", icon: "🦝", accent: "var(--p2)" },
+      { slot: 1, name: "곰", icon: "🐻", accent: "var(--p2)" },
       { slot: 2, name: "여우", icon: "🦊", accent: "var(--p3)" },
       { slot: 3, name: "부엉이", icon: "🦉", accent: "var(--p4)" }
     ];
 
     const ANIMAL_OPTIONS = [
       { name: "토끼", icon: "🐰" },
-      { name: "너구리", icon: "🦝" },
+      { name: "곰", icon: "🐻" },
       { name: "여우", icon: "🦊" },
       { name: "부엉이", icon: "🦉" },
-      { name: "곰", icon: "🐻" },
+      { name: "너구리", icon: "🦝" },
+      { name: "돼지", icon: "🐷" },
       { name: "호랑이", icon: "🐯" },
       { name: "사자", icon: "🦁" },
       { name: "팬더", icon: "🐼" },
       { name: "기린", icon: "🦒" },
-      { name: "돼지", icon: "🐷" },
       { name: "고양이", icon: "🐱" },
       { name: "강아지", icon: "🐶" }
     ];
 
-    const SETUP_STATES = ["HUMAN", "AI-1", "AI-2", "AI-3", "AI-4", "AI-5", "OFF"];
+    const SETUP_STATES = ["HUMAN", "AI-1", "AI-2", "AI-3", "AI-4", "AI-5", "AI-6", "OFF"];
     const AI_LEVEL_INFO = {
       1: { short: "AI-1", label: "AI-1 초급", desc: "초급" },
       2: { short: "AI-2", label: "AI-2 쉬움", desc: "쉬움" },
       3: { short: "AI-3", label: "AI-3 보통", desc: "보통" },
       4: { short: "AI-4", label: "AI-4 어려움", desc: "어려움" },
-      5: { short: "AI-5", label: "AI-5 최상", desc: "최상" }
+      5: { short: "AI-5", label: "AI-5 최상", desc: "최상" },
+      6: { short: "AI-6", label: "AI-6 챌린지", desc: "챌린지" }
     };
+
     const deepCopy = (value) => JSON.parse(JSON.stringify(value));
     const getSetupStateLabel = (state, compact = false) => {
       if (state === "HUMAN" || state === "OFF") return state;
@@ -1095,7 +1166,7 @@
       static analyzeSet(group) {
         const len = group.length;
         if (len === 0) return { valid: false, possible: false, label: "빈 줄", score: 0, kind: null };
-        if (len > 4) return { valid: false, possible: false, label: "세트 초과", score: 0, kind: null };
+        if (len > 4) return { valid: false, possible: false, label: "세트 불가", score: 0, kind: null };
 
         const non = group.filter(tile => !tile.joker);
         if (non.length === 0) {
@@ -1124,7 +1195,7 @@
       static analyzeRun(group) {
         const len = group.length;
         if (len === 0) return { valid: false, possible: false, label: "빈 줄", score: 0, kind: null };
-        if (len > 13) return { valid: false, possible: false, label: "런 초과", score: 0, kind: null };
+        if (len > 13) return { valid: false, possible: false, label: "런 불가", score: 0, kind: null };
 
         const non = group.filter(tile => !tile.joker);
         if (non.length === 0) {
@@ -1173,7 +1244,7 @@
           return {
             valid: true,
             ready: true,
-            label: "조커 조합",
+            label: "조커 세트/런",
             score: Math.max(setRes.score, runRes.score),
             kind: "wild"
           };
@@ -1182,7 +1253,6 @@
         if (setRes.valid) {
           return { valid: true, ready: true, label: setRes.label, score: setRes.score, kind: setRes.kind };
         }
-
         if (runRes.valid) {
           return { valid: true, ready: true, label: runRes.label, score: runRes.score, kind: runRes.kind };
         }
@@ -1895,9 +1965,9 @@
         const futureMobility = this.countAppendableRackTiles(state);
         const stableGroups = state.table.filter(group => group.length >= 4 && RummyRules.analyzeGroup(group).valid).length;
         const fragileGroups = state.table.filter(group => group.length === 3 && RummyRules.analyzeGroup(group).valid).length;
-        let summary = `타일 ${rackReduction}장`;
+        let summary = `손패 ${rackReduction}장`;
         if (state.stats.rearrangeCount > 0) summary = `재배열 ${rackReduction}장`;
-        else if (state.stats.newGroupCount > 1) summary = `복수 줄 ${rackReduction}장`;
+        else if (state.stats.newGroupCount > 1) summary = `복수 새 줄 ${rackReduction}장`;
         else if (state.stats.appendCount > 0 && state.stats.newGroupCount === 0) summary = "줄 추가";
         else if (state.stats.newGroupCount > 0) summary = `새 줄 ${rackReduction}장`;
 
@@ -2112,7 +2182,7 @@
               const jokerNote = removedJoker
                 ? (sourceRole && targetRole
                     ? `${groupIndex + 1}번 줄의 조커를 ${sourceRole.actsAsNumber} 역할에서 빼서 ${targetRole.actsAsNumber} 역할 새 줄로 옮기세요.`
-                    : `${groupIndex + 1}번 줄의 조커를 새 줄 완성용으로 옮기세요.`)
+                    : `${groupIndex + 1}번 줄의 조커를 꺼내 새 줄로 옮기세요.`)
                 : "";
               const candidate = this.createRearrangedState(state, ctx, {
                 mode: "single",
@@ -2326,7 +2396,7 @@
                 const retainedGroups = partition.groups;
                 const detailText = sourceRole && targetRole
                   ? `${groupIndex + 1}번 줄의 조커를 ${sourceRole.actsAsNumber} 역할에서 빼서 ${targetRole.actsAsNumber} 역할 새 줄로 옮기세요.`
-                  : `${groupIndex + 1}번 줄의 조커를 빼서 ${formatTileList(targetGroup)} 줄을 만드세요.`;
+                  : `${groupIndex + 1}번 줄의 조커를 꺼내 ${formatTileList(targetGroup)} 형태의 새 줄로 만드세요.`;
 
                 const candidate = this.createRearrangedState(state, ctx, {
                   mode: "joker",
@@ -2440,28 +2510,29 @@
         super(1, {
           maxDepth: 1,
           beamWidth: 1,
-          maxBranchesPerState: 10,
-          maxRackGroupBranches: 10,
-          maxAppendBranches: 10,
+          maxBranchesPerState: 8,
+          maxRackGroupBranches: 8,
+          maxAppendBranches: 0,
           maxOpeningGroups: 1,
-          maxOpeningSolutions: 8,
-          openingQuota: 6,
-          newGroupQuota: 6,
-          safeAppendQuota: 2,
-          appendQuota: 4,
+          maxOpeningSolutions: 6,
+          openingQuota: 4,
+          newGroupQuota: 4,
+          safeAppendQuota: 0,
+          appendQuota: 0,
           rearrangeQuota: 0,
           allowRearrange: false,
+          blunderRate: 0.30,
           timeLimitMs: 20,
           weights: {
-            rackReduction: 100,
-            actionScore: 1,
-            newGroup: 20,
-            append: 12,
+            rackReduction: 80,
+            actionScore: 0.8,
+            newGroup: 16,
+            append: 0,
             rearrange: 0,
-            groupDelta: 4,
+            groupDelta: 2,
             coverage: 0,
-            jokerKeep: 2,
-            jokerSpend: 1,
+            jokerKeep: 0,
+            jokerSpend: 0,
             orphan: 0,
             tableRisk: 0,
             race: 0,
@@ -2472,6 +2543,14 @@
             jokerTrap: 0
           }
         });
+      }
+
+      chooseMove(gameState, options = {}) {
+        const move = super.chooseMove(gameState);
+        if (!move) return null;
+        if ((move.rackReduction || 0) >= gameState.currentPlayer.rack.length) return move;
+        if (options.applyBlunder !== false && Math.random() < (this.config.blunderRate || 0)) return null;
+        return move;
       }
     }
 
@@ -2491,7 +2570,7 @@
           appendQuota: 8,
           rearrangeQuota: 0,
           allowRearrange: false,
-          timeLimitMs: 30,
+          timeLimitMs: 60,
           weights: {
             rackReduction: 116,
             actionScore: 1.16,
@@ -2523,53 +2602,53 @@
     class AILevel3Strategy extends AIBaseStrategy {
       constructor() {
         super(3, {
-          maxDepth: 3,
-          beamWidth: 14,
-          maxBranchesPerState: 18,
-          maxRackGroupBranches: 14,
-          maxAppendBranches: 12,
+          maxDepth: 4,
+          beamWidth: 18,
+          maxBranchesPerState: 20,
+          maxRackGroupBranches: 16,
+          maxAppendBranches: 14,
           maxOpeningGroups: 4,
           maxOpeningSolutions: 22,
           openingQuota: 12,
-          newGroupQuota: 6,
-          safeAppendQuota: 2,
-          appendQuota: 6,
+          newGroupQuota: 8,
+          safeAppendQuota: 3,
+          appendQuota: 8,
           rearrangeQuota: 6,
           allowRearrange: true,
           rearrangeMode: "single",
           maxTouchedGroups: 1,
-          maxRackTilesForRearrange: 2,
-          maxPoolTiles: 8,
+          maxRackTilesForRearrange: 3,
+          maxPoolTiles: 10,
           maxGroupComboBranches: 6,
-          maxRackSubsetBranches: 18,
+          maxRackSubsetBranches: 20,
           maxPartitionSolutions: 4,
           maxPartitionSolutionsBridge: 2,
-          maxRearrangeBranches: 12,
+          maxRearrangeBranches: 14,
           maxRemovedPerGroup: 2,
           maxRemovedTableTiles: 2,
-          maxSplitGroupSize: 8,
-          maxRemovalPlanBranches: 8,
+          maxSplitGroupSize: 10,
+          maxRemovalPlanBranches: 10,
           allowJokerRemoval: false,
           protectedRackSubsetReserve: 3,
           singleQuota: 6,
           protectedRackSubsets: true,
-          timeLimitMs: 120,
+          timeLimitMs: 160,
           weights: {
-            rackReduction: 122,
-            actionScore: 1.25,
+            rackReduction: 125,
+            actionScore: 1.28,
             newGroup: 32,
-            append: 18,
+            append: 22,
             rearrange: 84,
             groupDelta: 10,
             coverage: 8,
-            jokerKeep: 12,
+            jokerKeep: 14,
             jokerSpend: 18,
             orphan: 15,
             tableRisk: 8,
-            race: 4,
+            race: 5,
             openingProgress: 1.3,
             openingComplete: 470,
-            futureMobility: 10,
+            futureMobility: 12,
             stableSplit: 14,
             bridge: 22,
             fragile: 8,
@@ -2689,7 +2768,7 @@
           conditionalSubsetExhaustive: true,
           exhaustiveRackThreshold: 10,
           exhaustivePoolThreshold: 10,
-          timeLimitMs: 340,
+          timeLimitMs: 500,
           weights: {
             rackReduction: 150,
             actionScore: 1.45,
@@ -2712,20 +2791,324 @@
             entropy: 8,
             jokerRelocation: 44,
             jokerEfficiency: 22,
-            jokerTrap: 14
+            jokerTrap: 14,
+            racePressure: 40,
+            emergencyPressure: 80,
+            alertPressure: 15,
+            finishBonus: 600,
+            closingBonus: 10,
+            winBonus: 2000,
+            futureRackReduction: 18,
+            futureAppendDensity: 3,
+            nearComplete: 8
           }
         });
+      }
+
+      computeFuturePotential(state, ctx) {
+        const rackGroups = RummyAIUtils.getValidGroupsFromTiles(
+          state.rack,
+          ctx.rackGroupCache,
+          state.rack.length
+        );
+        const usedIds = new Set();
+        let futureRackReduction = 0;
+        for (const group of rackGroups.slice(0, 20)) {
+          if (group.ids.every(id => !usedIds.has(id))) {
+            group.ids.forEach(id => usedIds.add(id));
+            futureRackReduction += group.size;
+          }
+        }
+
+        let futureAppendDensity = 0;
+        outer: for (const tile of state.rack) {
+          for (const group of state.table) {
+            if (RummyRules.analyzeGroup([...group, tile]).valid) {
+              futureAppendDensity += 1;
+              if (futureAppendDensity >= 15) break outer;
+            }
+          }
+        }
+
+        let nearCompleteCount = 0;
+        const nonJokers = state.rack.filter(tile => !tile.joker);
+        for (let i = 0; i < nonJokers.length; i += 1) {
+          for (let j = i + 1; j < nonJokers.length; j += 1) {
+            const a = nonJokers[i];
+            const b = nonJokers[j];
+            if (a.number === b.number && a.color !== b.color) {
+              nearCompleteCount += 1;
+            }
+            if (a.color === b.color) {
+              const diff = Math.abs(a.number - b.number);
+              if (diff === 1 || diff === 2) nearCompleteCount += 1;
+            }
+          }
+        }
+
+        return {
+          futureRackReduction,
+          futureAppendDensity: Math.min(futureAppendDensity, 15),
+          nearCompleteCount: Math.min(nearCompleteCount, 12)
+        };
+      }
+
+      evaluateState(state, ctx, terminal) {
+        let score = super.evaluateState(state, ctx, terminal);
+        const w = this.config.weights;
+        const rackReduction = ctx.initialRackSize - state.rack.length;
+        const opponentRacks = ctx.gameState.playersMeta
+          .filter((_, index) => index !== ctx.gameState.turnIndex)
+          .map(player => player.rackCount);
+        const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
+
+        if (smallestOpponentRack <= 1) {
+          score += rackReduction * (w.emergencyPressure || 0);
+        } else if (smallestOpponentRack <= 3) {
+          score += rackReduction * (w.racePressure || 0);
+        } else if (smallestOpponentRack <= 5) {
+          score += rackReduction * (w.alertPressure || 0);
+        }
+
+        if (state.rack.length === 0) {
+          score += w.winBonus || 0;
+        } else if (state.rack.length <= 2) {
+          score += w.finishBonus || 0;
+        } else if (state.rack.length <= 4) {
+          score += rackReduction * (w.closingBonus || 0);
+        }
+
+        if (terminal && state.rack.length > 0) {
+          const potential = this.computeFuturePotential(state, ctx);
+          score += potential.futureRackReduction * (w.futureRackReduction || 0);
+          score += potential.futureAppendDensity * (w.futureAppendDensity || 0);
+          score += potential.nearCompleteCount * (w.nearComplete || 0);
+        }
+
+        return score;
+      }
+    }
+
+    class AILevel6Strategy extends AIBaseStrategy {
+      constructor() {
+        super(6, {
+          maxDepth: 5,
+          beamWidth: 32,
+          maxBranchesPerState: 28,
+          maxRackGroupBranches: 18,
+          maxAppendBranches: 16,
+          maxOpeningGroups: 6,
+          maxOpeningSolutions: 36,
+          openingQuota: 14,
+          newGroupQuota: 6,
+          safeAppendQuota: 4,
+          appendQuota: 4,
+          rearrangeQuota: 14,
+          allowRearrange: true,
+          rearrangeMode: "single+bridge+joker-gap+joker+exact",
+          maxTouchedGroups: 3,
+          maxRackTilesForRearrange: 4,
+          maxPoolTiles: 12,
+          maxGroupComboBranches: 10,
+          maxRackSubsetBranches: 32,
+          maxPartitionSolutions: 8,
+          maxPartitionSolutionsBridge: 6,
+          maxRearrangeBranches: 22,
+          maxRemovedPerGroup: 2,
+          maxRemovedTableTiles: 4,
+          maxSplitGroupSize: 12,
+          maxRemovalPlanBranches: 12,
+          allowJokerRemoval: true,
+          protectedRackSubsetReserve: 6,
+          singleQuota: 4,
+          bridgeQuota: 4,
+          jokerQuota: 6,
+          jokerGapQuota: 6,
+          jokerRelocationQuota: 4,
+          exactQuota: 4,
+          protectedRackSubsets: true,
+          conditionalSubsetExhaustive: true,
+          exhaustiveRackThreshold: 10,
+          exhaustivePoolThreshold: 10,
+          timeLimitMs: 600,
+          weights: {
+            rackReduction: 150,
+            actionScore: 1.45,
+            newGroup: 36,
+            append: 22,
+            rearrange: 122,
+            groupDelta: 14,
+            coverage: 16,
+            jokerKeep: 30,
+            jokerSpend: 30,
+            orphan: 24,
+            tableRisk: 5,
+            race: 12,
+            openingProgress: 1.4,
+            openingComplete: 580,
+            futureMobility: 22,
+            stableSplit: 22,
+            bridge: 34,
+            fragile: 12,
+            entropy: 8,
+            jokerRelocation: 44,
+            jokerEfficiency: 22,
+            jokerTrap: 14,
+            racePressure: 40,
+            emergencyPressure: 80,
+            alertPressure: 15,
+            finishBonus: 600,
+            closingBonus: 10,
+            winBonus: 2000,
+            futureRackReduction: 18,
+            futureAppendDensity: 3,
+            nearComplete: 0,
+            drawWeightedNearComplete: 120,
+            tileScarcity: 14,
+            drawFutility: 20
+          }
+        });
+      }
+
+      computeFuturePotential(state, ctx) {
+        const rackGroups = RummyAIUtils.getValidGroupsFromTiles(
+          state.rack,
+          ctx.rackGroupCache,
+          state.rack.length
+        );
+        const usedIds = new Set();
+        let futureRackReduction = 0;
+        for (const group of rackGroups.slice(0, 20)) {
+          if (group.ids.every(id => !usedIds.has(id))) {
+            group.ids.forEach(id => usedIds.add(id));
+            futureRackReduction += group.size;
+          }
+        }
+
+        let futureAppendDensity = 0;
+        outer: for (const tile of state.rack) {
+          for (const group of state.table) {
+            if (RummyRules.analyzeGroup([...group, tile]).valid) {
+              futureAppendDensity += 1;
+              if (futureAppendDensity >= 15) break outer;
+            }
+          }
+        }
+
+        return {
+          futureRackReduction,
+          futureAppendDensity: Math.min(futureAppendDensity, 15)
+        };
+      }
+
+      computeDrawAwareness(state, ctx) {
+        const tracker = ctx.gameState.tileTracker;
+        const result = { drawWeightedScore: 0, scarcityBonus: 0, futileWaits: 0 };
+        if (!tracker || tracker.uncertainTotal <= 0) return result;
+
+        const nonJokers = state.rack.filter(tile => !tile.joker);
+        const colorKeys = COLORS.map(color => color.key);
+
+        for (let i = 0; i < nonJokers.length; i += 1) {
+          for (let j = i + 1; j < nonJokers.length; j += 1) {
+            const a = nonJokers[i];
+            const b = nonJokers[j];
+            const neededKeys = [];
+
+            if (a.number === b.number && a.color !== b.color) {
+              const usedColors = new Set([a.color, b.color]);
+              colorKeys.forEach(colorKey => {
+                if (!usedColors.has(colorKey)) neededKeys.push(`${colorKey}-${a.number}`);
+              });
+            }
+
+            if (a.color === b.color) {
+              const lo = Math.min(a.number, b.number);
+              const hi = Math.max(a.number, b.number);
+              if (hi - lo === 1) {
+                if (lo > 1) neededKeys.push(`${a.color}-${lo - 1}`);
+                if (hi < 13) neededKeys.push(`${a.color}-${hi + 1}`);
+              } else if (hi - lo === 2) {
+                neededKeys.push(`${a.color}-${lo + 1}`);
+              }
+            }
+
+            if (neededKeys.length === 0) continue;
+
+            let pairProb = 0;
+            let anyAvailable = false;
+            neededKeys.forEach(key => {
+              const remaining = tracker.uncertain[key] || 0;
+              if (remaining > 0) anyAvailable = true;
+              pairProb += remaining / tracker.uncertainTotal;
+            });
+            result.drawWeightedScore += pairProb;
+            if (!anyAvailable) result.futileWaits += 1;
+          }
+        }
+
+        state.rack.forEach(tile => {
+          const key = tile.joker ? "joker" : `${tile.color}-${tile.number}`;
+          if ((tracker.uncertain[key] || 0) === 0) {
+            result.scarcityBonus += 1;
+          }
+        });
+
+        return result;
+      }
+
+      evaluateState(state, ctx, terminal) {
+        let score = super.evaluateState(state, ctx, terminal);
+        const w = this.config.weights;
+        const rackReduction = ctx.initialRackSize - state.rack.length;
+        const opponentRacks = ctx.gameState.playersMeta
+          .filter((_, index) => index !== ctx.gameState.turnIndex)
+          .map(player => player.rackCount);
+        const smallestOpponentRack = opponentRacks.length > 0 ? Math.min(...opponentRacks) : Infinity;
+
+        if (smallestOpponentRack <= 1) {
+          score += rackReduction * (w.emergencyPressure || 0);
+        } else if (smallestOpponentRack <= 3) {
+          score += rackReduction * (w.racePressure || 0);
+        } else if (smallestOpponentRack <= 5) {
+          score += rackReduction * (w.alertPressure || 0);
+        }
+
+        if (state.rack.length === 0) {
+          score += w.winBonus || 0;
+        } else if (state.rack.length <= 2) {
+          score += w.finishBonus || 0;
+        } else if (state.rack.length <= 4) {
+          score += rackReduction * (w.closingBonus || 0);
+        }
+
+        if (terminal && state.rack.length > 0) {
+          const potential = this.computeFuturePotential(state, ctx);
+          score += potential.futureRackReduction * (w.futureRackReduction || 0);
+          score += potential.futureAppendDensity * (w.futureAppendDensity || 0);
+
+          const draw = this.computeDrawAwareness(state, ctx);
+          score += draw.drawWeightedScore * (w.drawWeightedNearComplete || 0);
+          score += draw.scarcityBonus * (w.tileScarcity || 0);
+          score -= draw.futileWaits * (w.drawFutility || 0);
+        }
+
+        return score;
       }
     }
 
     class RummyAI {
       static chooseMove(gameState, level) {
-        const targetLevel = Math.max(1, Math.min(5, Number(level) || 1));
+        const targetLevel = Math.max(1, Math.min(6, Number(level) || 1));
         let bestMove = null;
         let bestLevel = 0;
 
         for (let currentLevel = 1; currentLevel <= targetLevel; currentLevel += 1) {
-          const move = this.getStrategy(currentLevel).chooseMove(gameState);
+          const strategy = this.getStrategy(currentLevel);
+          const moveOptions = currentLevel === 1 && targetLevel > 1
+            ? { applyBlunder: false }
+            : undefined;
+          const move = strategy.chooseMove(gameState, moveOptions);
           if (move) move.engineLevel = currentLevel;
           const comparison = this.compareMovePriority(move, bestMove, gameState);
           if (comparison > 0 || (comparison === 0 && move && currentLevel > bestLevel)) {
@@ -2746,6 +3129,7 @@
           case 3: return new AILevel3Strategy();
           case 4: return new AILevel4Strategy();
           case 5: return new AILevel5Strategy();
+          case 6: return new AILevel6Strategy();
           default: return new AILevel1Strategy();
         }
       }
@@ -2789,7 +3173,7 @@
 
     class RummyHintEngine {
       static getHint(gameState) {
-        const move = RummyAI.chooseMove(gameState, 5);
+        const move = RummyAI.chooseMove(gameState, 6);
         if (!move) {
           const reason = !gameState.currentPlayer.opened && gameState.ruleOptions.initial30
             ? "아직 30점 등록 전이라 기존 테이블 재배열은 사용할 수 없습니다."
@@ -2797,7 +3181,7 @@
               ? "현재 탐색 범위 내에서 유효한 재배열을 찾지 못했습니다."
               : "현재 상태에서는 손패를 안전하게 줄이는 유효 수보다 드로우가 더 안정적입니다.";
           return {
-            title: "AI-5 힌트",
+            title: "AI-6 힌트",
             summary: "1장 뽑기",
             shortText: "드로우 추천",
             reason,
@@ -2807,7 +3191,7 @@
             rackTileIds: [],
             tableTileIds: [],
             targetGroupIndices: [],
-            steps: ["이번 턴은 1장 뽑기 버튼을 눌러 턴을 넘기세요."],
+            steps: ["1장 뽑기 버튼을 눌러 턴을 넘기세요."],
             openingScore: 0
           };
         }
@@ -2834,8 +3218,8 @@
             const groupIndices = findGroupIndicesByTileIds(move.table, [action.createdGroupIds]);
             groupIndices.forEach(index => targetGroupIndices.add(index));
             createdGroupsSummary.push(formatTileList((action.createdGroupIds || []).map(id => tileLookup.get(id)).filter(Boolean)));
-            steps.push(`손패의 ${formatTileList(sourceRackTiles)}을 선택하세요.`);
-            steps.push("새 줄 버튼을 눌러 조합을 만드세요.");
+            steps.push(`손패의 ${formatTileList(sourceRackTiles)}으로 새 줄을 만드세요.`);
+            steps.push("새 줄 버튼을 눌러 조합을 확정하세요.");
             return;
           }
 
@@ -2877,7 +3261,7 @@
           if (note && !steps.includes(note)) steps.push(note);
         });
         if (!gameState.currentPlayer.opened && gameState.ruleOptions.initial30 && openingScore >= 30 && openingBreakdown.length > 0) {
-          steps.unshift(`합계 ${openingScore}점으로 30점 등록을 충족합니다.`);
+          steps.unshift(`이 수는 ${openingScore}점으로 30점 등록을 충족합니다.`);
           openingBreakdown.slice().reverse().forEach(line => {
             steps.unshift(line);
           });
@@ -2886,24 +3270,24 @@
           ? `추천: ${move.summary}으로 테이블을 재정리하세요.`
           : move.type === "append"
             ? "추천: 기존 줄에 1장을 추가하세요."
-            : `추천: ${move.summary} 플레이를 진행하세요.`;
+            : `추천: ${move.summary}을 실행하세요.`;
         const reason = !gameState.currentPlayer.opened && gameState.ruleOptions.initial30 && openingScore >= 30
           ? `손패 ${move.rackReduction}장을 줄이면서 초기 등록 ${openingScore}점을 충족합니다.`
           : move.type === "rearrange"
             ? `손패 ${move.rackReduction}장을 줄이면서 기존 테이블을 안정적으로 유지할 수 있습니다.`
             : move.rackReduction > 0
               ? `이번 턴에 손패 ${move.rackReduction}장을 줄일 수 있는 최선 수입니다.`
-              : "지금 단계에서 가장 안전한 추천 수입니다.";
+              : "현재 상태에서는 추가 이득보다 안전한 정리가 더 중요합니다.";
         const futureBenefit = move.futureMobility > 0
           ? `남은 손패 중 ${move.futureMobility}장은 다음 턴에도 기존 줄과 연결될 가능성이 큽니다.`
-          : "이번 수는 즉시 손패 감소에 집중한 추천입니다.";
+          : "남은 손패는 다음 턴에 새 조합 중심으로 풀어야 합니다.";
         const shortParts = [];
         if (move.stats.rearrangeCount > 0) shortParts.push(`재배열 ${move.stats.rearrangeCount}회`);
         if (move.stats.newGroupCount > 0) shortParts.push(`새 줄 ${move.stats.newGroupCount}개`);
         if (move.stats.appendCount > 0) shortParts.push(`줄 추가 ${move.stats.appendCount}회`);
 
         return {
-          title: "AI-5 힌트",
+          title: "AI-6 힌트",
           summary: move.summary,
           shortText: shortParts.join(" · ") || move.summary,
           reason,
@@ -2912,14 +3296,14 @@
           score: move.score,
           rackTileIds: [...rackTileIds],
           tableTileIds: [...tableTileIds],
-          targetGroupIndices: [...targetGroupIndices].sort((a, b) => a - b),
+          targetGroupIndices: [...targetGroupIndices],
+          steps: steps.length > 0 ? steps : ["강조된 타일과 줄을 중심으로 수를 진행하세요."],
+          openingScore,
+          openingBreakdown,
           touchedGroupLabels: [...touchedGroupLabels],
           createdGroupsSummary,
           preservedGroupsSummary,
-          openingBreakdown,
-          futureBenefit,
-          steps,
-          openingScore
+          futureBenefit
         };
       }
     }
@@ -2940,6 +3324,7 @@
         this.players = [];
         this.turn = 0;
         this.bag = [];
+        this.tilePool = null;
         this.table = [];
         this.workingTable = [];
         this.baseTableCount = 0;
@@ -2968,8 +3353,63 @@
         }
       }
 
-      buildGameStateForAI() {
+      initTileTracker() {
+        this.tilePool = {};
+        COLORS.forEach(color => {
+          for (let num = 1; num <= 13; num += 1) {
+            this.tilePool[`${color.key}-${num}`] = 2;
+          }
+        });
+        if (this.ruleOptions.jokers) {
+          this.tilePool.joker = 2;
+        }
+      }
+
+      buildTileTracker(forPlayerIndex) {
+        if (!this.tilePool) this.initTileTracker();
+        const pool = {};
+        const known = {};
+        Object.entries(this.tilePool).forEach(([key, count]) => {
+          pool[key] = count;
+          known[key] = 0;
+        });
+
+        const tileKey = (tile) => tile.joker ? "joker" : `${tile.color}-${tile.number}`;
+        const myRack = this.players[forPlayerIndex]?.rack || [];
+        myRack.forEach(tile => {
+          const key = tileKey(tile);
+          known[key] = (known[key] || 0) + 1;
+        });
+        this.workingTable.flat().forEach(tile => {
+          const key = tileKey(tile);
+          known[key] = (known[key] || 0) + 1;
+        });
+
+        const uncertain = {};
+        let uncertainTotal = 0;
+        Object.entries(pool).forEach(([key, total]) => {
+          const remaining = Math.max(0, total - (known[key] || 0));
+          uncertain[key] = remaining;
+          uncertainTotal += remaining;
+        });
+
+        const bagSize = this.bag.length;
+        const opponentTotalCards = this.players
+          .filter((_, index) => index !== forPlayerIndex)
+          .reduce((sum, player) => sum + player.rack.length, 0);
+
         return {
+          pool,
+          known,
+          uncertain,
+          uncertainTotal,
+          bagSize,
+          opponentTotalCards
+        };
+      }
+
+      buildGameStateForAI() {
+        const state = {
           currentPlayer: {
             rack: deepCopy(this.currentPlayer.rack),
             opened: this.currentPlayer.opened,
@@ -2987,6 +3427,10 @@
           })),
           turnIndex: this.turn
         };
+        if (this.currentPlayer.aiLevel === 6) {
+          state.tileTracker = this.buildTileTracker(this.turn);
+        }
+        return state;
       }
 
       clearHint() {
@@ -3065,11 +3509,15 @@
         }
 
         this.players = players;
+        this.initTileTracker();
         this.bag = this.createBag();
         this.players.forEach(player => {
           player.rack = this.bag.splice(0, 14);
           this.addLog(player, this.ruleOptions.initial30 ? "30 등록 전" : "준비 완료");
         });
+
+        const hasChallenge = this.players.some(player => player.aiLevel === 6);
+        document.body.classList.toggle("night-mode", hasChallenge);
 
         this.beginTurn();
         ui.showScreen("game-screen");
@@ -3132,8 +3580,8 @@
 
         if (this.ruleOptions.initial30 && !this.currentPlayer.opened) {
           ui.setInfo(
-            "30점 등록 턴",
-            `${this.currentPlayer.icon} ${this.currentPlayer.name}는 이번에 자기 손패만으로 30점 이상을 새 줄로 등록해야 합니다. 기존 테이블은 아직 건드릴 수 없습니다.`
+            "30점 등록 전",
+            `${this.currentPlayer.icon} ${this.currentPlayer.name}는 이번 턴에 자기 손패만으로 30점 이상 새 줄을 등록해야 합니다. 기존 테이블은 아직 건드릴 수 없습니다.`
           );
         } else {
           ui.setInfo(
@@ -3143,7 +3591,6 @@
         }
         ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name} 차례입니다.`);
       }
-
       addLog(player, message) {
         player.logs.unshift(message);
         if (player.logs.length > 3) player.logs.pop();
@@ -3176,6 +3623,16 @@
         this.selectedRackIds = new Set(snapshot.selectedRackIds);
         this.selectedTableIds = new Set(snapshot.selectedTableIds);
         this.selectedGroupIndex = snapshot.selectedGroupIndex;
+      }
+
+      getTurnStartRackSize() {
+        return this.actionHistory.length > 0
+          ? this.actionHistory[0].rack.length
+          : this.currentPlayer.rack.length;
+      }
+
+      hasReducedRackThisTurn() {
+        return this.currentPlayer.rack.length < this.getTurnStartRackSize();
       }
 
       getSelectedRackTilesInOrder() {
@@ -3340,8 +3797,14 @@
       drawTile() {
         if (!this.canHumanAct("draw")) return;
         if (this.actionHistory.length > 0) {
-          ui.toast("이미 타일을 냈다면 이번 턴에는 뽑을 수 없어요.");
-          return;
+          if (!this.hasReducedRackThisTurn()) {
+            while (this.actionHistory.length > 0) {
+              this.restoreAction(this.actionHistory.pop());
+            }
+          } else {
+            ui.toast("이미 타일을 냈다면 이번 턴에는 뽑을 수 없어요.");
+            return;
+          }
         }
         if (this.bag.length === 0) {
           ui.toast("가방이 비어 있어요.");
@@ -3368,7 +3831,6 @@
           });
         }
       }
-
       getOpeningScore() {
         return calculateInitialOpenScore(this.workingTable.slice(this.baseTableCount));
       }
@@ -3387,6 +3849,11 @@
           return;
         }
 
+        if (!this.hasReducedRackThisTurn()) {
+          ui.toast("자기 손패를 최소 1장은 내려놓아야 턴을 종료할 수 있어요. 무르기로 정리하거나 1장 뽑기를 사용하세요.");
+          return;
+        }
+
         const groups = this.workingTable.filter(group => group.length > 0);
         for (const group of groups) {
           const result = RummyRules.analyzeGroup(group);
@@ -3399,7 +3866,7 @@
         if (this.ruleOptions.initial30 && !this.currentPlayer.opened) {
           const openingGroups = groups.slice(this.baseTableCount);
           if (openingGroups.length === 0) {
-            ui.toast("30점 등록 전에는 자기 손패로 새 줄을 만들어야 해요.");
+            ui.toast("30점 등록 전에는 자기 손패로만 새 줄을 만들어야 해요.");
             return;
           }
           const openingScore = calculateInitialOpenScore(openingGroups);
@@ -3422,7 +3889,6 @@
 
         this.passTurn();
       }
-
       passTurn() {
         if (this.gameOver) return;
         this.turn = (this.turn + 1) % this.players.length;
@@ -3439,7 +3905,7 @@
           if (this.bag.length > 0) {
             this.currentPlayer.rack.push(this.bag.pop());
             this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 1장 뽑음`);
-            ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}가 1장을 뽑았습니다.`);
+            ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}가 1장을 뽑습니다.`);
           } else {
             this.addLog(this.currentPlayer, `AI-${this.currentPlayer.aiLevel} · 패스`);
             ui.toast(`${this.currentPlayer.icon} ${this.currentPlayer.name}는 낼 조합이 없어요.`);
@@ -3472,7 +3938,6 @@
 
         setTimeout(() => this.passTurn(), 700);
       }
-
       requestHint() {
         if (this.gameOver || !this.currentPlayer || this.currentPlayer.type !== "HUMAN") return;
         if (this.drewTileThisTurn) {
@@ -3480,13 +3945,49 @@
           return;
         }
 
-        const hint = RummyHintEngine.getHint(this.buildGameStateForAI());
+        const hasAction = this.actionHistory.length > 0;
+        const gameState = this.buildGameStateForAI();
+        if (!gameState.tileTracker) {
+          gameState.tileTracker = this.buildTileTracker(this.turn);
+        }
+        const hint = RummyHintEngine.getHint(gameState);
+        if (hasAction && hint.moveType === "draw") {
+          const allValid = this.workingTable.every(group =>
+            group.length === 0 || RummyRules.analyzeGroup(group).valid
+          );
+          hint.title = hint.title || "AI-6 힌트";
+          hint.rackTileIds = [];
+          hint.tableTileIds = [];
+          hint.targetGroupIndices = [];
+          if (allValid) {
+            hint.summary = "턴 종료";
+            hint.shortText = "현재 배치 확정";
+            hint.leadText = "현재 배치가 유효합니다. 턴 종료를 눌러 확정하세요.";
+            hint.reason = "추가로 줄일 수 있는 수를 찾지 못했습니다. 현재 상태로 턴을 종료하는 것이 좋습니다.";
+            hint.steps = ["턴 종료 버튼을 눌러 현재 배치를 확정하세요."];
+            hint.moveType = "end-turn";
+          } else {
+            hint.summary = "되돌리기";
+            hint.shortText = "무효 줄 존재";
+            hint.leadText = "유효하지 않은 줄이 있습니다. 무르기로 정리하거나 추가 타일을 배치하세요.";
+            hint.reason = "현재 테이블에 유효하지 않은 줄이 남아 있어 턴을 종료할 수 없습니다.";
+            hint.steps = ["무르기 버튼으로 이전 상태로 돌아가거나, 추가 타일을 배치하세요."];
+            hint.moveType = "undo";
+          }
+        }
         this.lastHint = hint;
         ui.showHint(hint);
         ui.updateAll();
-        ui.toast(hint.moveType === "draw" ? "이번 턴 추천은 드로우입니다." : "추천 타일과 줄을 강조했어요.");
+        if (hint.moveType === "draw") {
+          ui.toast("이번 턴 추천은 드로우입니다.");
+        } else if (hint.moveType === "end-turn") {
+          ui.toast("턴 종료를 추천합니다.");
+        } else if (hint.moveType === "undo") {
+          ui.toast("무르기나 추가 배치가 필요합니다.");
+        } else {
+          ui.toast("추천 타일과 줄을 강조했어요.");
+        }
       }
-
       win(player) {
         this.gameOver = true;
         clearTimeout(this.aiTimer);
@@ -3496,7 +3997,6 @@
         document.getElementById("modal").classList.add("show");
         ui.updateAll();
       }
-
       restart() {
         document.getElementById("modal").classList.remove("show");
         this.startFromSetup();
@@ -3505,6 +4005,7 @@
       toMenu() {
         clearTimeout(this.aiTimer);
         document.getElementById("modal").classList.remove("show");
+        document.body.classList.remove("night-mode");
         ui.showScreen("start-screen");
         ui.hideSetup();
         ui.renderSetup();
@@ -3539,7 +4040,13 @@
           row.className = "setup-row";
           const state = game.setupState[idx];
           const animal = ANIMAL_OPTIONS[game.playerAnimalIndices[idx]] || ANIMAL_OPTIONS[0];
-          const btnClass = state === "HUMAN" ? "state-human" : state === "OFF" ? "state-off" : "state-ai";
+          const btnClass = state === "HUMAN"
+            ? "state-human"
+            : state === "OFF"
+              ? "state-off"
+              : state === "AI-6"
+                ? "state-ai-6"
+                : "state-ai";
           row.innerHTML = `
             <div class="setup-player">
               <div class="setup-icon">${animal.icon}</div>
@@ -3576,9 +4083,9 @@
             },
             {
               key: "initial30",
-              icon: "3️⃣0️⃣",
+              icon: "30",
               name: "초기 30점 등록",
-              desc: "첫 성공 턴에 자기 손패만으로 30점 이상을 내려야 합니다.",
+              desc: "첫 성공 턴에는 자기 손패만으로 30점 이상을 내려야 합니다.",
               value: game.ruleOptions.initial30
             }
           ];
@@ -3643,7 +4150,7 @@
             </div>
             <div class="p-stats">
               <div class="mini-chip">손패 ${player.rack.length}장</div>
-              <div class="mini-chip">${idx === game.turn ? "현재 턴" : "현재 대기"}</div>
+              <div class="mini-chip">${idx === game.turn ? "현재 턴" : "대기 중"}</div>
               <div class="mini-chip">${openText}</div>
             </div>
             <div class="mini-log">${lastLog}</div>
@@ -3660,7 +4167,7 @@
         if (game.workingTable.length === 0) {
           const empty = document.createElement("div");
           empty.className = "empty-table";
-          empty.innerHTML = "중앙 테이블이 비어 있어요.<br />손패나 테이블 타일을 선택한 뒤 <strong>새 줄</strong> / <strong>줄에 추가</strong>로 조합을 만들 수 있어요.";
+          empty.innerHTML = "중앙 테이블이 비어 있어요.<br />손패나 테이블 타일을 선택한 뒤 <strong>새 줄</strong> / <strong>줄에 추가</strong>로 조합을 만들어 보세요.";
           tableArea.appendChild(empty);
           return;
         }
@@ -3703,8 +4210,20 @@
         rackRow.innerHTML = "";
         if (!game.currentPlayer) return;
 
+        const isAI = game.currentPlayer.type === "AI";
         game.currentPlayer.rack.forEach(tile => {
           const wrapper = document.createElement("div");
+          if (isAI) {
+            wrapper.innerHTML = `
+              <div class="tile facedown ${game.currentPlayer.rack.length > 10 ? "small" : ""}">
+                <div class="tile-num">?</div>
+                <div class="tile-icon">🂠</div>
+              </div>
+            `;
+            rackRow.appendChild(wrapper.firstElementChild);
+            return;
+          }
+
           const hintClass = game.lastHint?.rackTileIds?.includes(tile.id) ? "hint" : "";
           wrapper.innerHTML = this.tileHtml(tile, false, game.selectedRackIds.has(tile.id), game.drawnTileId === tile.id, hintClass);
           const tileEl = wrapper.firstElementChild;
@@ -3715,7 +4234,7 @@
         if (game.currentPlayer.rack.length === 0) {
           const empty = document.createElement("div");
           empty.className = "chip";
-          empty.innerText = "손패가 비었습니다!";
+          empty.innerText = "손패가 비었습니다.";
           rackRow.appendChild(empty);
         }
       },
@@ -3724,7 +4243,6 @@
         document.getElementById("info-title").innerText = title;
         document.getElementById("info-text")[allowHtml ? "innerHTML" : "innerText"] = text;
       },
-
       showHint(hint) {
         const parts = [
           `<div class="hint-summary">${hint.leadText}</div>`,
@@ -3771,6 +4289,7 @@
         const hasSelection = game.getTotalSelectedCount() > 0;
         const hasGroup = game.selectedGroupIndex !== null;
         const hasAction = game.actionHistory.length > 0;
+        const canAutoRestoreDraw = hasAction && !game.hasReducedRackThisTurn();
 
         if (game.drewTileThisTurn) {
           [
@@ -3795,7 +4314,7 @@
         document.getElementById("btn-clear-select").disabled = !(hasSelection || hasGroup);
         document.getElementById("btn-undo-action").disabled = !hasAction;
         document.getElementById("btn-request-hint").disabled = false;
-        document.getElementById("btn-draw-tile").disabled = hasAction || game.bag.length === 0;
+        document.getElementById("btn-draw-tile").disabled = (hasAction && !canAutoRestoreDraw) || game.bag.length === 0;
         document.getElementById("btn-end-turn").disabled = !hasAction;
       },
 
