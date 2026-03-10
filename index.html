@@ -198,10 +198,66 @@
       font-size: 1.6rem;
     }
 
-    .setup-note {
-      color: #75685e;
+    .setup-brief {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #f7f2eb;
+      border: 1px solid #e6dbcf;
+      color: #6f6256;
       font-size: 0.92rem;
-      line-height: 1.45;
+      line-height: 1.4;
+    }
+
+    .setup-help {
+      border-radius: 14px;
+      background: #faf7f2;
+      border: 1px solid #e6ddd3;
+      overflow: hidden;
+    }
+
+    .setup-help summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 12px 14px;
+      font-weight: 700;
+      color: #5f5145;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .setup-help summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .setup-help summary::after {
+      content: "▾";
+      color: #8a7969;
+      font-size: 0.9rem;
+      transition: transform 0.18s ease;
+    }
+
+    .setup-help[open] summary::after {
+      transform: rotate(180deg);
+    }
+
+    .setup-help-body {
+      padding: 0 14px 14px;
+      border-top: 1px solid #eee4d9;
+      color: #75685e;
+      font-size: 0.88rem;
+      line-height: 1.42;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .setup-help-item strong {
+      display: block;
+      color: #54473d;
+      margin-bottom: 2px;
+      font-size: 0.9rem;
     }
 
     .state-btn {
@@ -906,12 +962,31 @@
         <div class="menu-section-title">룰 옵션</div>
         <div id="rule-options-setup" class="setup-container"></div>
 
-        <div class="setup-note">
-          HUMAN / AI-1 / AI-2 / AI-3 / AI-4 / AI-5 / AI-6 / OFF 순서로 바뀝니다.<br />
-          AI-1 초급, AI-2 쉬움, AI-3 보통, AI-4 어려움, AI-5 최상, AI-6 챌린지 단계로 난이도가 올라갑니다.<br />
-          AI-6은 타일 카운팅을 사용하는 챌린지 모드입니다.<br />
-          30점 등록 룰을 켜면 각 플레이어는 첫 성공 턴에 자기 손패만으로 30점 이상 새 줄을 등록해야 하고, 그 전엔 기존 테이블을 건드릴 수 없습니다.
+        <div class="setup-brief">
+          플레이어 구성과 룰을 정한 뒤 게임을 시작하세요.
         </div>
+
+        <details class="setup-help">
+          <summary>게임 규칙 자세히 보기</summary>
+          <div class="setup-help-body">
+            <div class="setup-help-item">
+              <strong>플레이어 상태</strong>
+              HUMAN / AI-1 / AI-2 / AI-3 / AI-4 / AI-5 / AI-6 / OFF 순서로 전환됩니다.
+            </div>
+            <div class="setup-help-item">
+              <strong>AI 난이도</strong>
+              AI-1 초급부터 AI-6 챌린지까지 단계적으로 강해집니다.
+            </div>
+            <div class="setup-help-item">
+              <strong>AI-6 챌린지</strong>
+              타일 카운팅을 사용하는 최고 난도입니다.
+            </div>
+            <div class="setup-help-item">
+              <strong>30점 등록</strong>
+              첫 성공 턴에는 자기 손패만으로 30점 이상 새 줄을 내야 하며, 그 전에는 기존 테이블을 건드릴 수 없습니다.
+            </div>
+          </div>
+        </details>
 
         <button class="btn-lg btn-orange" onclick="game.startCustom()">
           <div>게임 시작</div>
@@ -1055,6 +1130,8 @@
       5: { short: "AI-5", label: "AI-5 최상", desc: "최상" },
       6: { short: "AI-6", label: "AI-6 챌린지", desc: "챌린지" }
     };
+    const HINT_LIMIT_OPTIONS = [0, 3, 5, null];
+    const getHintLimitLabel = (value) => value === null ? "무제한" : `${value}개`;
 
     const deepCopy = (value) => JSON.parse(JSON.stringify(value));
     const getSetupStateLabel = (state, compact = false) => {
@@ -3318,7 +3395,8 @@
         this.playerAnimalIndices = [0, 1, 2, 3];
         this.ruleOptions = {
           jokers: false,
-          initial30: false
+          initial30: false,
+          hintLimit: null
         };
         this.modeKey = "custom";
         this.resetRound();
@@ -3441,6 +3519,15 @@
         this.lastHint = null;
       }
 
+      getInitialHintCount() {
+        return this.ruleOptions.hintLimit === null ? null : Number(this.ruleOptions.hintLimit) || 0;
+      }
+
+      canUseHint() {
+        if (!this.currentPlayer || this.currentPlayer.type !== "HUMAN") return false;
+        return this.currentPlayer.hintsRemaining === null || this.currentPlayer.hintsRemaining > 0;
+      }
+
       quickStart(count) {
         this.setupState = this.setupState.map((state, index) => (index < count ? state : "OFF"));
         this.ensureActiveSetupState(0, "HUMAN");
@@ -3473,6 +3560,14 @@
         ui.renderRuleOptions();
       }
 
+      cycleHintLimit() {
+        const current = this.ruleOptions.hintLimit === undefined ? null : this.ruleOptions.hintLimit;
+        const currentIndex = HINT_LIMIT_OPTIONS.findIndex(value => value === current);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % HINT_LIMIT_OPTIONS.length : 0;
+        this.ruleOptions.hintLimit = HINT_LIMIT_OPTIONS[nextIndex];
+        ui.renderRuleOptions();
+      }
+
       cyclePlayerAnimal(index) {
         this.playerAnimalIndices[index] = (this.playerAnimalIndices[index] + 1) % ANIMAL_OPTIONS.length;
         ui.renderSetup();
@@ -3501,6 +3596,7 @@
             accent: preset.accent,
             type: state === "HUMAN" ? "HUMAN" : "AI",
             aiLevel: state.startsWith("AI-") ? Number(state.split("-")[1]) : null,
+            hintsRemaining: this.getInitialHintCount(),
             rack: [],
             logs: [],
             opened: !this.ruleOptions.initial30
@@ -3948,6 +4044,10 @@
           ui.toast("1장을 뽑은 뒤에는 힌트 대신 턴 종료만 할 수 있어요.");
           return;
         }
+        if (!this.canUseHint()) {
+          ui.toast("사용 가능한 힌트가 없어요.");
+          return;
+        }
 
         const hasAction = this.actionHistory.length > 0;
         const gameState = this.buildGameStateForAI();
@@ -3978,6 +4078,9 @@
             hint.steps = ["무르기 버튼으로 이전 상태로 돌아가거나, 추가 타일을 배치하세요."];
             hint.moveType = "undo";
           }
+        }
+        if (this.currentPlayer.hintsRemaining !== null) {
+          this.currentPlayer.hintsRemaining = Math.max(0, this.currentPlayer.hintsRemaining - 1);
         }
         this.lastHint = hint;
         ui.showHint(hint);
@@ -4091,6 +4194,14 @@
               name: "초기 30점 등록",
               desc: "첫 성공 턴에는 자기 손패만으로 30점 이상을 내려야 합니다.",
               value: game.ruleOptions.initial30
+            },
+            {
+              key: "hintLimit",
+              icon: "💡",
+              name: "힌트 횟수 제한",
+              desc: "0개, 3개, 5개, 무제한 중에서 선택합니다.",
+              valueLabel: getHintLimitLabel(game.ruleOptions.hintLimit),
+              cycle: true
             }
           ];
 
@@ -4105,9 +4216,11 @@
                   <div style="font-size:0.82rem; color:#7a6e63;">${option.desc}</div>
                 </div>
               </div>
-              <button class="state-btn ${option.value ? "state-on" : "state-off-option"}">${option.value ? "ON" : "OFF"}</button>
+              <button class="state-btn ${option.cycle ? "state-ai" : (option.value ? "state-on" : "state-off-option")}">${option.cycle ? option.valueLabel : (option.value ? "ON" : "OFF")}</button>
             `;
-            row.querySelector("button").onclick = () => game.toggleRuleOption(option.key);
+            row.querySelector("button").onclick = () => option.cycle
+              ? game.cycleHintLimit()
+              : game.toggleRuleOption(option.key);
             container.appendChild(row);
           });
         };
@@ -4294,6 +4407,14 @@
         const hasGroup = game.selectedGroupIndex !== null;
         const hasAction = game.actionHistory.length > 0;
         const canAutoRestoreDraw = hasAction && !game.hasReducedRackThisTurn();
+        const hintButton = document.getElementById("btn-request-hint");
+        if (hintButton) {
+          const hintLimit = game.ruleOptions.hintLimit;
+          const hintRemaining = game.currentPlayer?.hintsRemaining;
+          hintButton.innerText = hintLimit === null
+            ? "💡 힌트"
+            : `💡 힌트 ${hintRemaining}/${hintLimit}`;
+        }
 
         if (game.drewTileThisTurn) {
           [
@@ -4317,7 +4438,7 @@
         document.getElementById("btn-append-group").disabled = !(hasSelection && hasGroup);
         document.getElementById("btn-clear-select").disabled = !(hasSelection || hasGroup);
         document.getElementById("btn-undo-action").disabled = !hasAction;
-        document.getElementById("btn-request-hint").disabled = false;
+        document.getElementById("btn-request-hint").disabled = !game.canUseHint();
         document.getElementById("btn-draw-tile").disabled = (hasAction && !canAutoRestoreDraw) || game.bag.length === 0;
         document.getElementById("btn-end-turn").disabled = !hasAction;
       },
