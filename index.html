@@ -159,6 +159,26 @@
     .btn-green { background: #43a047; }
     .btn-gray { background: #78909c; }
 
+    .quick-ai-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 112px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #f3fff4;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(2px);
+    }
+
+    .quick-ai-chip:active {
+      transform: scale(0.98);
+    }
+
     #menu-main,
     #menu-setup {
       display: flex;
@@ -942,7 +962,7 @@
         </button>
         <button class="btn-lg btn-green" onclick="game.quickStartMixed()">
           <div>1인 + AI 3명</div>
-          <span>🎭</span>
+          <span id="quick-mixed-level" class="quick-ai-chip" onclick="event.stopPropagation(); game.cycleQuickStartMixedLevel()">AI-3 보통</span>
         </button>
 
         <div class="menu-section-title">룰 옵션</div>
@@ -3393,6 +3413,7 @@
       constructor() {
         this.setupState = ["HUMAN", "HUMAN", "OFF", "OFF"];
         this.playerAnimalIndices = [0, 1, 2, 3];
+        this.quickStartMixedLevel = 3;
         this.ruleOptions = {
           jokers: false,
           initial30: false,
@@ -3539,12 +3560,11 @@
       }
 
       quickStartMixed() {
-        const defaults = ["HUMAN", "AI-1", "AI-2", "AI-3"];
+        const mixedAiState = `AI-${this.quickStartMixedLevel}`;
         this.setupState = this.setupState.map((state, index) => {
           if (index >= 4) return "OFF";
           if (index === 0) return "HUMAN";
-          if (String(state).startsWith("AI-")) return state;
-          return defaults[index];
+          return mixedAiState;
         });
         this.modeKey = "mixed";
         this.startFromSetup();
@@ -3566,6 +3586,11 @@
         const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % HINT_LIMIT_OPTIONS.length : 0;
         this.ruleOptions.hintLimit = HINT_LIMIT_OPTIONS[nextIndex];
         ui.renderRuleOptions();
+      }
+
+      cycleQuickStartMixedLevel() {
+        this.quickStartMixedLevel = this.quickStartMixedLevel >= 6 ? 1 : this.quickStartMixedLevel + 1;
+        ui.renderQuickStartMixedLevel();
       }
 
       cyclePlayerAnimal(index) {
@@ -4117,6 +4142,7 @@
         ui.hideSetup();
         ui.renderSetup();
         ui.renderRuleOptions();
+        ui.renderQuickStartMixedLevel();
       }
     }
 
@@ -4131,11 +4157,20 @@
         document.getElementById("menu-setup").style.display = "flex";
         this.renderSetup();
         this.renderRuleOptions();
+        this.renderQuickStartMixedLevel();
       },
 
       hideSetup() {
         document.getElementById("menu-setup").style.display = "none";
         document.getElementById("menu-main").style.display = "flex";
+        this.renderQuickStartMixedLevel();
+      },
+
+      renderQuickStartMixedLevel() {
+        const chip = document.getElementById("quick-mixed-level");
+        if (!chip) return;
+        const info = AI_LEVEL_INFO[game.quickStartMixedLevel];
+        chip.innerText = info ? info.label : `AI-${game.quickStartMixedLevel}`;
       },
 
       renderSetup() {
@@ -4477,6 +4512,7 @@
     const game = new Game();
     ui.renderSetup();
     ui.renderRuleOptions();
+    ui.renderQuickStartMixedLevel();
   </script>
 </body>
 </html>
